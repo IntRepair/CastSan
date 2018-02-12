@@ -1,0 +1,11 @@
+main
+*.o
+*.so
+*.a
+
+*.creator.user
+*.config
+*.creator
+*.files
+*.includes
+output.txt
