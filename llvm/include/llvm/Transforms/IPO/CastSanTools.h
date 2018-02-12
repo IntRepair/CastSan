@@ -1,5 +1,5 @@
-#ifndef LLVM_TRANSFORMS_IPO_SAFEDISPATCH_TOOLS_H
-#define LLVM_TRANSFORMS_IPO_SAFEDISPATCH_TOOLS_H
+#ifndef LLVM_TRANSFORMS_IPO_CASTSAN_TOOLS_H
+#define LLVM_TRANSFORMS_IPO_CASTSAN_TOOLS_H
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Instructions.h"
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "SafeDispatchLog.h"
+#include "CastSanLog.h"
 
 /*Paul:
 helper method from the one underneath

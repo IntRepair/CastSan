@@ -1689,7 +1689,7 @@ static void WriteConstants(unsigned FirstVal, unsigned LastVal,
               CDS->getElementAsAPFloat(i).bitcastToAPInt().getLimitedValue());
       }
     } else if (isa<ConstantArray>(C) || isa<ConstantStruct>(C) ||
-               isa<ConstantVector>(C)) {
+               isa<ConstantVector>(C)|| isa<ConstantMemberPointer>(C)) {
       Code = bitc::CST_CODE_AGGREGATE;
       for (const Value *Op : C->operands())
         Record.push_back(VE.getValueID(Op));

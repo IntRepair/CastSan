@@ -1,6 +1,6 @@
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/SafeDispatch.h"
-#include "llvm/Transforms/IPO/SafeDispatchCHA.h"
+#include "llvm/Transforms/IPO/CastSan.h"
+#include "llvm/Transforms/IPO/CastSanCHA.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/InstIterator.h"
@@ -16,7 +16,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/CallSite.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
 
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -38,7 +38,7 @@
 namespace llvm {
 
   /**
-   * Module pass for the SafeDispatch Gold Plugin
+   * Module pass for the CastSan Gold Plugin
    */
   class SDLayoutBuilder : public ModulePass {
   public:

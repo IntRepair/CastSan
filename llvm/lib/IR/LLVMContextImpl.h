@@ -33,6 +33,7 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/ValueHandle.h"
 #include <vector>
+#include <map>
 
 namespace llvm {
 
@@ -948,6 +949,12 @@ public:
   
   typedef ConstantUniqueMap<ConstantStruct> StructConstantsTy;
   StructConstantsTy StructConstants;
+
+  typedef std::tuple<std::string, uint64_t, int64_t> CMPLookupKey;
+  typedef std::tuple<CMPLookupKey, ConstantMemberPointer*> CMPElement;
+  typedef std::map<CMPLookupKey, ConstantMemberPointer*> MemberPointerConstantsTy;
+  MemberPointerConstantsTy MemberPointerConstants;
+
   
   typedef ConstantUniqueMap<ConstantVector> VectorConstantsTy;
   VectorConstantsTy VectorConstants;

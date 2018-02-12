@@ -372,6 +372,227 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
                                                       << Mismatched;
 }
 
+//===----------------------------------------------------------------------===//
+//                        CastSan Additions begin 
+//===----------------------------------------------------------------------===//
+
+#include "llvm/IR/Value.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+
+#include "llvm/Transforms/IPO/CastSanMD.h"
+#include "llvm/Transforms/IPO/CastSanGVMd.h"
+
+#include <vector>
+
+template <class T>
+T sd_fold(llvm::User* u, T (*callback)(T, unsigned, llvm::Value*), T def, std::set<llvm::User*>& seenUsers) {
+  if(seenUsers.count(u))
+    return def;
+  seenUsers.insert(u);
+
+  T next = def;
+  assert(u);
+  for(unsigned i=0; i < u->getNumOperands(); i++) {
+    llvm::Value* op = u->getOperand(i);
+    assert(op);
+
+    next = callback(next, i, op);
+
+    llvm::User* uOp = llvm::dyn_cast<llvm::User>(op);
+    if (uOp && ! llvm::dyn_cast<llvm::Instruction>(op)) {
+      next = sd_fold(uOp, callback, next, seenUsers);
+    }
+  }
+  return next;
+}
+
+template <class ArgT>
+using sd_map_callback_t = llvm::User* (*)(llvm::User* root, std::vector<llvm::Value*> children, ArgT);
+
+template <class ArgT>
+llvm::User* sd_map(llvm::User* u, sd_map_callback_t<ArgT> callback, ArgT arg) {
+  std::vector<llvm::Value*> children;
+  for(unsigned i=0; i < u->getNumOperands(); i++) {
+    llvm::Value* op = u->getOperand(i);
+    llvm::User* child = dyn_cast_or_null<llvm::User>(op);
+
+    if (!child) {
+      children.push_back(op);
+    } else {
+      children.push_back(sd_map<ArgT>(child, callback, arg));
+    }
+  }
+
+  return callback(u, children, arg);
+}
+
+bool sd_ismemptr(bool isMemptr, unsigned ind, llvm::Value* val) {
+  return isMemptr || (llvm::dyn_cast_or_null<llvm::ConstantMemberPointer>(val) != NULL);
+}
+
+bool sd_contains_memptr(llvm::User* c) {
+  std::set<llvm::User*> seenUsers;
+  return  ((llvm::dyn_cast_or_null<llvm::ConstantMemberPointer>(c) != NULL) ||
+          sd_fold<bool>(c, sd_ismemptr, false, seenUsers));
+}
+
+struct sd_unfold_map_cb_arg_t {
+  llvm::Module &M;
+  CodeGenModule &CGM;
+  llvm::Instruction *insertPos;
+};
+
+//Paul: unfold the map of 
+llvm::User* sd_unfold_map_cb(llvm::User* root,
+                             std::vector<llvm::Value*> children,
+                             struct sd_unfold_map_cb_arg_t &arg) {
+
+  llvm::Constant* rootConst = dyn_cast<llvm::Constant>(root);
+  llvm::ConstantMemberPointer *cmptr;
+
+  llvm::ConstantExpr* ce = NULL;
+  llvm::ConstantVector* cv = NULL;
+  llvm::GlobalValue* gv = NULL;
+  llvm::ConstantDataSequential* cds = NULL;
+
+  bool allConst = true;
+  for (int i = 0; i < children.size(); i++)
+    if (!dyn_cast<llvm::Constant>(children[i]))
+      allConst = false;
+    else
+      assert(root->getOperand(i) == children[i] && "Const children must be unmodified");
+
+  if (rootConst && (cmptr = dyn_cast<llvm::ConstantMemberPointer>(rootConst))) {
+    llvm::Value *args[2];
+    llvm::Type *mptrType = cmptr->getType();
+    llvm::Type *elType = cmptr->getOperand(0)->getType();
+    llvm::User *newMPtr = llvm::UndefValue::get(mptrType);
+
+    int64_t oldIndInt = llvm::dyn_cast<llvm::ConstantInt>(cmptr->getOperand(0))->getSExtValue();
+
+    if (oldIndInt == 0)
+      return cmptr;
+
+    // The old vtable index is the first value of the member pointer - 1
+    args[0] = llvm::ConstantInt::get(elType, (oldIndInt - 1) / 8);
+    args[1] = llvm::MetadataAsValue::get(arg.M.getContext(),
+                                        sd_getClassNameMetadata(cmptr->getClassName(), arg.M, NULL));
+
+    // Add the intrinsic for converting the vtable index
+    llvm::Value *newInd = llvm::CallInst::Create(arg.CGM.getIntrinsic(llvm::Intrinsic::sd_get_vtbl_index),
+        args, "llvm.sd.mptr.intrinsic", arg.insertPos);
+
+    // Store the new vtable index + 1 in the member pointer
+    newInd = llvm::BinaryOperator::Create(llvm::Instruction::Mul, newInd, 
+      llvm::ConstantInt::get(newInd->getType(), 8), "", arg.insertPos);
+
+    newInd = llvm::BinaryOperator::Create(llvm::Instruction::Add, newInd,
+      llvm::ConstantInt::get(newInd->getType(), 1), "", arg.insertPos);
+
+    unsigned int indices[1] = { 0 };
+
+    newMPtr = llvm::InsertValueInst::Create(newMPtr, newInd, indices, "", arg.insertPos);
+    indices[0] = 1;
+    newMPtr = llvm::InsertValueInst::Create(newMPtr, cmptr->getOperand(1), indices, "", arg.insertPos);
+    
+    return newMPtr;
+  } else if (rootConst && !allConst) {
+    // Current node is constant, but one of the children has been unrolled into a non-constant
+    // Value.
+    if ((ce = dyn_cast<llvm::ConstantExpr>(rootConst))) {
+        switch(ce->getOpcode()) {
+        case llvm::Instruction::Select: {
+          assert(children.size() == 3);
+          return llvm::SelectInst::Create(children[0], children[1], children[2],
+            "llvm.sd.unfolded.select", arg.insertPos);
+        }
+        case llvm::Instruction::GetElementPtr: {
+          llvm::Value* arr = children[0];
+          llvm::Type* pointeeType = dyn_cast<llvm::PointerType>(arr->getType())->getElementType();
+          children.erase(children.begin());
+
+          return llvm::GetElementPtrInst::Create(pointeeType, arr, children,
+            "llvm.sd.unfolded.getelementptr", arg.insertPos);
+        }
+        case llvm::Instruction::PtrToInt: {
+          llvm::Type* intType = dyn_cast<llvm::IntegerType>(ce->getType());
+
+          return new llvm::PtrToIntInst(children[0], intType,
+            "llvm.sd.unfolded.ptrtoint", arg.insertPos);
+        }
+        default: {
+          rootConst->dump();
+          assert(false && "Unknown constant in unfolding");
+        }
+        }
+    } else if (gv = dyn_cast<llvm::GlobalValue>(rootConst)) {
+      if (sd_contains_memptr(rootConst)) {
+        rootConst->dump();
+        return rootConst;
+      }
+      //assert(!sd_contains_memptr(rootConst) && "NYI Global Values");
+      return rootConst;
+    } else if (cv = dyn_cast<llvm::ConstantVector>(rootConst)) {
+      assert(!sd_contains_memptr(rootConst) && "NYI Constant Vector");
+      return rootConst;
+    } else if (dyn_cast<llvm::ConstantStruct>(rootConst) ||
+               dyn_cast<llvm::ConstantArray>(rootConst)) {
+      llvm::User *newStruct = rootConst;
+
+      for (int i = 0; i < children.size(); i++) {
+        auto childConst = dyn_cast<llvm::Constant>(children[i]);
+        if (!childConst) {
+          unsigned int indices[1] = { (unsigned int) i } ;
+          newStruct = llvm::InsertValueInst::Create(newStruct, children[i], indices, "", arg.insertPos);
+        }
+      }
+      return newStruct;
+    } else if (cds = dyn_cast<llvm::ConstantDataSequential>(rootConst)) {
+      assert(!sd_contains_memptr(rootConst) && "ConstantDataSequentual NYI");
+      return rootConst;
+    } else {
+      assert(!sd_contains_memptr(rootConst) && "Unkown Constant Type");
+      return rootConst;
+    }
+  } else {
+    if (!rootConst) {
+      for (int i = 0; i < children.size(); i++) {
+        root->setOperand(i, children[i]);
+      }
+    }
+    return root;
+  }
+}
+
+static void sd_rewriteMPtrToIntrinsics(llvm::Module& M, CodeGenModule &CGM) {
+  for(llvm::Module::iterator f_itr = M.begin(); f_itr != M.end(); f_itr++) {
+    llvm::Function* f = f_itr;
+    for(llvm::Function::iterator bb_itr = f->begin(); bb_itr != f->end(); bb_itr++) {
+      llvm::BasicBlock* bb = bb_itr;
+      for(llvm::BasicBlock::iterator i_itr = bb->begin(); i_itr != bb->end(); i_itr++) {
+        llvm::Instruction* inst = i_itr;
+        assert(inst);
+
+        for(unsigned i=0; i < inst->getNumOperands(); i++) {
+          llvm::User* arg = dyn_cast<llvm::User>(inst->getOperand(i));
+          if (arg && sd_contains_memptr(arg)) {
+            sd_unfold_map_cb_arg_t unfold_arg = {M, CGM, inst};
+            //Paul: call the above function with the unfold arguments from above 
+            inst->setOperand(i, sd_map<sd_unfold_map_cb_arg_t&>(arg, sd_unfold_map_cb, unfold_arg));
+          }
+        }
+      }
+    }
+  }
+}
+
+//===----------------------------------------------------------------------===//
+//                        CastSan Additions end
+//===----------------------------------------------------------------------===//
+
+
 void CodeGenModule::Release() {
   EmitDeferred();
   applyGlobalValReplacements();
@@ -484,6 +705,13 @@ void CodeGenModule::Release() {
   }
 
   SimplifyPersonality();
+
+  assert(&TheModule);
+
+  //Paul: during code generation also do the following rewrite
+  if (getCodeGenOpts().EmitIVTBL)
+    sd_rewriteMPtrToIntrinsics(TheModule, *this);//Paul: this is our function from above 
+
 
   if (getCodeGenOpts().EmitDeclMetadata)
     EmitDeclMetadata();

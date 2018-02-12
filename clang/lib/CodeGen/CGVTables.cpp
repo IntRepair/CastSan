@@ -24,10 +24,48 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <algorithm>
-#include <cstdio>
+
+#include <string>
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/Transforms/IPO/CastSanMD.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
+#include "llvm/Transforms/IPO/CastSanVtblMD.h"
+
+#include "llvm/Transforms/IPO/CastSanLog.h"
+
 
 using namespace clang;
 using namespace CodeGen;
+
+/**
+ * Adds the metadata to the vcall access inside the function
+ This function is not used at all
+ */
+//static void
+//sd_addVcallMetadata(CodeGenModule& CGM, llvm::Value *adjustedThisPtr, const GlobalDecl& GD,
+//                 const CXXMethodDecl *MD, const ThunkInfo *Thunk, bool isVarArgs = false) {
+//  std::string className = CGM.getCXXABI().GetClassMangledName(MD->getParent());
+
+//  if (Thunk && ! Thunk->This.NonVirtual && sd_isVtableName(className)) {
+//    // this is a bitcast instruction with a gep inside
+//    llvm::BitCastInst* bcInst = dyn_cast<llvm::BitCastInst>(adjustedThisPtr);
+
+//    if (!bcInst) {
+//      // if this is not a bitcast instruction, this should be a
+//      // nonvirtual covariant return thunk
+//      llvm::Instruction* inst = cast<llvm::Instruction>(adjustedThisPtr);
+//      const llvm::Function* function = inst->getParent()->getParent();
+//      assert(function->getName().startswith("_ZTch"));
+//      return;
+//    }
+
+//    llvm::LLVMContext& C = bcInst->getContext();
+//    llvm::MDNode* mdNode = llvm::MDNode::get(C, NULL);
+//    bcInst->setMetadata(SD_MD_VCALL, mdNode);
+//  }
+//}
 
 CodeGenVTables::CodeGenVTables(CodeGenModule &CGM)
     : CGM(CGM), VTContext(CGM.getContext().getVTableContext()) {}
@@ -82,7 +120,9 @@ static bool similar(const ABIArgInfo &infoL, CanQualType typeL,
 
 static RValue PerformReturnAdjustment(CodeGenFunction &CGF,
                                       QualType ResultType, RValue RV,
-                                      const ThunkInfo &Thunk) {
+                                      const ThunkInfo &Thunk,
+                                      const CXXRecordDecl *RD) {
+
   // Emit the return adjustment.
   bool NullCheckValue = !ResultType->isReferenceType();
 
@@ -106,7 +146,7 @@ static RValue PerformReturnAdjustment(CodeGenFunction &CGF,
   auto ClassAlign = CGF.CGM.getClassPointerAlignment(ClassDecl);
   ReturnValue = CGF.CGM.getCXXABI().performReturnAdjustment(CGF,
                                             Address(ReturnValue, ClassAlign),
-                                            Thunk.Return);
+                                            Thunk.Return, RD);
 
   if (NullCheckValue) {
     CGF.Builder.CreateBr(AdjustEnd);
@@ -145,6 +185,7 @@ CodeGenFunction::GenerateVarArgsThunk(llvm::Function *Fn,
                                       const CGFunctionInfo &FnInfo,
                                       GlobalDecl GD, const ThunkInfo &Thunk) {
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(GD.getDecl());
+  const CXXRecordDecl *RD = MD->getParent();
   const FunctionProtoType *FPT = MD->getType()->getAs<FunctionProtoType>();
   QualType ResultType = FPT->getReturnType();
 
@@ -186,7 +227,7 @@ CodeGenFunction::GenerateVarArgsThunk(llvm::Function *Fn,
   // Adjust "this", if necessary.
   Builder.SetInsertPoint(&*ThisStore);
   llvm::Value *AdjustedThisPtr =
-      CGM.getCXXABI().performThisAdjustment(*this, ThisPtr, Thunk.This);
+      CGM.getCXXABI().performThisAdjustment(*this, ThisPtr, Thunk.This, RD);
   ThisStore->setOperand(0, AdjustedThisPtr);
 
   if (!Thunk.Return.isEmpty()) {
@@ -197,12 +238,14 @@ CodeGenFunction::GenerateVarArgsThunk(llvm::Function *Fn,
         RValue RV = RValue::get(T->getOperand(0));
         T->eraseFromParent();
         Builder.SetInsertPoint(&BB);
-        RV = PerformReturnAdjustment(*this, ResultType, RV, Thunk);
+        RV = PerformReturnAdjustment(*this, ResultType, RV, Thunk, RD);
         Builder.CreateRet(RV.getScalarVal());
         break;
       }
     }
   }
+  
+  //  sd_addVcallMetadata(CGM, AdjustedThisPtr, GD, MD, &Thunk, true);
 
   return Fn;
 }
@@ -215,6 +258,7 @@ void CodeGenFunction::StartThunk(llvm::Function *Fn, GlobalDecl GD,
 
   // Build FunctionArgs.
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(GD.getDecl());
+  const CXXRecordDecl *RD = MD->getParent();
   QualType ThisType = MD->getThisType(getContext());
   const FunctionProtoType *FPT = MD->getType()->getAs<FunctionProtoType>();
   QualType ResultType = CGM.getCXXABI().HasThisReturn(GD)
@@ -262,7 +306,7 @@ void CodeGenFunction::EmitCallAndReturnForThunk(llvm::Value *Callee,
   // Adjust the 'this' pointer if necessary
   llvm::Value *AdjustedThisPtr =
     Thunk ? CGM.getCXXABI().performThisAdjustment(
-                          *this, LoadCXXThisAddress(), Thunk->This)
+                          *this, LoadCXXThisAddress(), Thunk->This, RD)
           : LoadCXXThis();
 
   if (CurFnInfo->usesInAlloca()) {
@@ -327,7 +371,7 @@ void CodeGenFunction::EmitCallAndReturnForThunk(llvm::Value *Callee,
 
   // Consider return adjustment if we have ThunkInfo.
   if (Thunk && !Thunk->Return.isEmpty())
-    RV = PerformReturnAdjustment(*this, ResultType, RV, *Thunk);
+    RV = PerformReturnAdjustment(*this, ResultType, RV, *Thunk, RD);
   else if (llvm::CallInst* Call = dyn_cast<llvm::CallInst>(CallOrInvoke))
     Call->setTailCallKind(llvm::CallInst::TCK_Tail);
 
@@ -339,6 +383,9 @@ void CodeGenFunction::EmitCallAndReturnForThunk(llvm::Value *Callee,
   AutoreleaseResult = false;
 
   FinishThunk();
+
+//  sd_addVcallMetadata(CGM, AdjustedThisPtr, CurGD, MD, Thunk, false);
+
 }
 
 void CodeGenFunction::EmitMustTailThunk(const CXXMethodDecl *MD,
@@ -506,6 +553,27 @@ void CodeGenVTables::maybeEmitThunkForVTable(GlobalDecl GD,
 
 void CodeGenVTables::EmitThunks(GlobalDecl GD)
 {
+  //comment me if not using
+  //std::string Name = CGM.getCXXABI().GetClassMangledName(RD);
+  //sd_print("CGVTables.cpp: Vtable name: %s \n", Name.c_str());
+  
+  //Paul: printing the component types of the v table 
+  /*printVTableInitializer(RD, 
+                         Components,
+                         NumComponents, 
+                         VTableThunks,
+                         NumVTableThunks, 
+                         RTTI);
+  */
+
+  //for (auto base = RD->bases_begin(); base != RD->bases_end(); base++) {
+    //Paul: this calls into the SDVTblMD.h the dump method, the result is the 
+    // nice color printings
+    
+    //sd_print("Color printing C++ Base :\n"); 
+    //base->getType()->getAsCXXRecordDecl()->dump();
+  //}
+
   const CXXMethodDecl *MD = 
     cast<CXXMethodDecl>(GD.getDecl())->getCanonicalDecl();
 
@@ -655,6 +723,84 @@ llvm::Constant *CodeGenVTables::CreateVTableInitializer(
   return llvm::ConstantArray::get(ArrayType, Inits);
 }
 
+//Paul: this is used just for printing the vtable component type 
+// see line 556 in this file
+void CodeGenVTables::printVTableInitializer(const CXXRecordDecl *RD, 
+                                  const VTableComponent *Components,
+                                             unsigned NumComponents, 
+                    const VTableLayout::VTableThunkTy *VTableThunks,
+                                           unsigned NumVTableThunks, 
+                                               llvm::Constant *RTTI) {
+  unsigned NextVTableThunkIndex = 0;
+
+  for (unsigned I = 0; I != NumComponents; ++I) {
+    VTableComponent Component = Components[I];
+    
+    switch (Component.getKind()) {
+    case VTableComponent::CK_VCallOffset:
+      sd_print("CK_VCallOffset: %d\n",Component.getVCallOffset().getQuantity());
+      break;
+    case VTableComponent::CK_VBaseOffset:
+      sd_print("CK_VBaseOffset: %d\n",Component.getVBaseOffset().getQuantity());
+      break;
+    case VTableComponent::CK_OffsetToTop:
+      sd_print("CK_OffsetToTop: %d\n",Component.getOffsetToTop().getQuantity());
+      break;
+    case VTableComponent::CK_RTTI:
+      sd_print("CK_RTTI:\n");
+      break;
+    case VTableComponent::CK_FunctionPointer:
+    case VTableComponent::CK_CompleteDtorPointer:
+    case VTableComponent::CK_DeletingDtorPointer: {
+      GlobalDecl GD;
+
+      // Get the right global decl.
+      switch (Component.getKind()) {
+      default:
+        llvm_unreachable("Unexpected vtable component kind");
+      case VTableComponent::CK_FunctionPointer:
+        sd_print("CK_FunctionPointer:");
+        GD = Component.getFunctionDecl();
+        break;
+      case VTableComponent::CK_CompleteDtorPointer:
+        sd_print("CK_CompleteDtorPointer:");
+        GD = GlobalDecl(Component.getDestructorDecl(), Dtor_Complete);
+        break;
+      case VTableComponent::CK_DeletingDtorPointer:
+        sd_print("CK_DeletingDtorPointer:");
+        GD = GlobalDecl(Component.getDestructorDecl(), Dtor_Deleting);
+        break;
+      }
+
+      if (cast<CXXMethodDecl>(GD.getDecl())->isPure()) {
+        // We have a pure virtual member function.
+        sd_print("pure\n");
+      } else if (cast<CXXMethodDecl>(GD.getDecl())->isDeleted()) {
+        sd_print("deleted\n");
+      } else {
+        // Check if we should use a thunk.
+        if (NextVTableThunkIndex < NumVTableThunks &&
+            VTableThunks[NextVTableThunkIndex].first == I) {
+          NextVTableThunkIndex++;
+          sd_print("thunk\n");
+        } else {
+          //llvm::Type *Ty = CGM.getTypes().GetFunctionTypeForVTable(GD);
+
+          //Init = CGM.GetAddrOfFunction(GD, Ty, /*ForVTable=*/true);
+          sd_print("funciton\n");
+        }
+      }
+      break;
+    }
+
+    case VTableComponent::CK_UnusedFunctionPointer:
+      sd_print("unused\n");
+      break;
+    };
+  }
+}
+
+
 llvm::GlobalVariable *
 CodeGenVTables::GenerateConstructionVTable(const CXXRecordDecl *RD, 
                                       const BaseSubobject &Base, 
@@ -703,12 +849,24 @@ CodeGenVTables::GenerateConstructionVTable(const CXXRecordDecl *RD,
 
   // Create and set the initializer.
   llvm::Constant *Init = CreateVTableInitializer(
-      Base.getBase(), VTLayout->vtable_component_begin(),
-      VTLayout->getNumVTableComponents(), VTLayout->vtable_thunk_begin(),
-      VTLayout->getNumVTableThunks(), RTTI);
+      Base.getBase(), 
+      VTLayout->vtable_component_begin(),
+      VTLayout->getNumVTableComponents(), 
+      VTLayout->vtable_thunk_begin(),
+      VTLayout->getNumVTableThunks(), 
+      RTTI);
   VTable->setInitializer(Init);
   
   CGM.EmitVTableBitSetEntries(VTable, *VTLayout.get());
+
+  //Paul: added by us
+  std::cerr << "Creating construction vtable for " << RD->getQualifiedNameAsString() << "\n";
+
+  //Paul added by us: this function is calling into our SD_VtableMD.h. 
+  //The goal is to make sure that the v table metadata is written
+  //into a new class metadata node such that it becomes accesible 
+  //afterwards when we build the cloud and call extractMetadata() 
+  sd_insertVtableMD(&CGM, VTable, VTLayout.get(), RD, &Base);
 
   return VTable;
 }

@@ -1,6 +1,6 @@
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/SafeDispatch.h"
-#include "llvm/Transforms/IPO/SafeDispatchLayoutBuilder.h"
+#include "llvm/Transforms/IPO/CastSan.h"
+#include "llvm/Transforms/IPO/CastSanLayoutBuilder.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/InstIterator.h"
@@ -17,8 +17,8 @@
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/MDBuilder.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
-#include "llvm/Transforms/IPO/SafeDispatchTools.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
 
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -654,7 +654,7 @@ void SDUpdateIndices::handleCheckCast(Module * M) {
 
     std::cerr << "CastCheck: Checking cast to: " << preciseClassName << " using VTable with root: " << vBaseClassName << std::endl;
 
-    // get VTable info from SafeDispatch
+    // get VTable info from CastSan
     // first the vtable we want to add the range check in
     SDLayoutBuilder::vtbl_t vtbl(vBaseClassName, 0);
 

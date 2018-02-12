@@ -135,6 +135,9 @@ public:
   bool PrepareForLTO;
   bool PrepareForThinLTO;
   bool PerformThinLTO;
+  bool EmitIVTBLs; //Paul: flag variable used for interleaving the v tables
+  bool EmitOVTBLs; //Paul: flag variable used for ordering the v tables
+
 
   /// Profile data file name that the instrumentation will be written to.
   std::string PGOInstrGen;

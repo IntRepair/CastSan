@@ -586,6 +586,20 @@ def fno_math_errno : Flag<["-"], "fno-math-errno">, Group<f_Group>;
 def fbracket_depth_EQ : Joined<["-"], "fbracket-depth=">, Group<f_Group>;
 def fsignaling_math : Flag<["-"], "fsignaling-math">, Group<f_Group>;
 def fno_signaling_math : Flag<["-"], "fno-signaling-math">, Group<f_Group>;
+
+def femit_vtbl_checks : Flag<["-"], "femit-vtbl-checks">, Group<f_Group>,
+                        Flags<[CC1Option]>,
+                        HelpText<"Emit runtime checks for VTable Pointers integrity">;
+
+def femit_ivtbl: Flag<["-"], "femit-ivtbl">, Group<f_Group>,
+                        Flags<[CC1Option]>,
+                        HelpText<"Emit Interleaved VTables and Intrinsics for CastSan CFI">;
+
+def femit_cast_checks: Flag<["-"], "femit-cast-checks">, Group<f_Group>,
+                        Flags<[CC1Option]>,
+                        HelpText<"Emit Cast Checks based on Ranges of interleaved VTables emited by -femit_ivtbl">;
+
+
 def fsanitize_EQ : CommaJoined<["-"], "fsanitize=">, Group<f_clang_Group>,
                    Flags<[CC1Option, CoreOption]>, MetaVarName<"<check>">,
                    HelpText<"Turn on runtime checks for various forms of undefined "

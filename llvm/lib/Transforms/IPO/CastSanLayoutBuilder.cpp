@@ -15,9 +15,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/CallSite.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLayoutBuilder.h"
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
-#include "llvm/Transforms/IPO/SafeDispatchTools.h"
+#include "llvm/Transforms/IPO/CastSanLayoutBuilder.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
 
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -44,9 +44,9 @@ using namespace llvm;
 
 char SDLayoutBuilder::ID = 0;
 
-INITIALIZE_PASS_BEGIN(SDLayoutBuilder, "sdovt", "Oredered VTable Layout Builder for SafeDispatch", false, false)
+INITIALIZE_PASS_BEGIN(SDLayoutBuilder, "sdovt", "Oredered VTable Layout Builder for CastSan", false, false)
 INITIALIZE_PASS_DEPENDENCY(SDBuildCHA) //Paul: depends on this pass
-INITIALIZE_PASS_END(SDLayoutBuilder, "sdovt", "Oredered VTable Layout Builder for SafeDispatch", false, false)
+INITIALIZE_PASS_END(SDLayoutBuilder, "sdovt", "Oredered VTable Layout Builder for CastSan", false, false)
 
 static bool sd_isVthunk(const llvm::StringRef& name) {
   return name.startswith("_ZTv") || // virtual thunk

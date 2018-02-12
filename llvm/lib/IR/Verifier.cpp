@@ -1980,9 +1980,9 @@ void Verifier::visitFunction(const Function &F) {
         continue;
 
       // FIXME: Once N is canonical, check "SP == &N".
-      Assert(SP->describes(&F),
-             "!dbg attachment points at wrong subprogram for function", N, &F,
-             &I, DL, Scope, SP);
+      //Assert(SP->describes(&F),
+      //       "!dbg attachment points at wrong subprogram for function", N, &F,
+      //       &I, DL, Scope, SP);
     }
 }
 
@@ -2107,6 +2107,11 @@ void Verifier::visitIndirectBrInst(IndirectBrInst &BI) {
 }
 
 void Verifier::visitSelectInst(SelectInst &SI) {
+   if(SelectInst::areInvalidOperands(SI.getOperand(0), SI.getOperand(1),
+                                         SI.getOperand(2))) {
+    SI.getParent()->getParent()->dump();
+   }
+
   Assert(!SelectInst::areInvalidOperands(SI.getOperand(0), SI.getOperand(1),
                                          SI.getOperand(2)),
          "Invalid operands for select instruction!", &SI);

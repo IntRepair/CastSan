@@ -21,6 +21,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/DataTypes.h"
+#include <map>
 
 namespace llvm {
 
@@ -211,8 +212,15 @@ class StructType : public CompositeType {
   /// This is null if the type is an literal struct or if it is a identified
   /// type that has an empty name.
   void *SymbolTableEntry;
+  static std::vector<StructType*> unnamedStructs;
+  static std::map<StringRef, StringRef> mangledNames;
+
 
 public:
+
+  StringRef clangMangledName = "";
+  void setMangledName(StringRef name);
+
   /// This creates an identified struct.
   static StructType *create(LLVMContext &Context, StringRef Name);
   static StructType *create(LLVMContext &Context);

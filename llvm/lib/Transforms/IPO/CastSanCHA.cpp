@@ -1,6 +1,6 @@
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/SafeDispatch.h"
-#include "llvm/Transforms/IPO/SafeDispatchCHA.h"
+#include "llvm/Transforms/IPO/CastSan.h"
+#include "llvm/Transforms/IPO/CastSanCHA.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/InstIterator.h"
@@ -16,7 +16,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/CallSite.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
 
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -43,7 +43,7 @@ using namespace llvm;
 
 char SDBuildCHA::ID = 0;
 
-INITIALIZE_PASS(SDBuildCHA, "sdcha", "Build CHA pass for SafeDispatch", false, false)
+INITIALIZE_PASS(SDBuildCHA, "sdcha", "Build CHA pass for CastSan", false, false)
 
 ModulePass* llvm::createSDBuildCHAPass() {
   return new SDBuildCHA();
@@ -219,7 +219,7 @@ void SDBuildCHA::buildClouds(Module &M) {
 
     // Paul: extractMetadata() extracts the metadata from each module
     // and puts it into this vector, this metadata was previously added 
-    // inside SafeDispatchVtblMD.h, in: sd_insertVtableMD() function
+    // inside CastSanVtblMD.h, in: sd_insertVtableMD() function
     // this function is called for each generated v table, during code generation  
     extractMetadata(md, infoVec);
   }

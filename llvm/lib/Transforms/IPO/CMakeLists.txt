@@ -3,6 +3,7 @@ add_llvm_library(LLVMipo
   BarrierNoopPass.cpp
   ConstantMerge.cpp
   CrossDSOCFI.cpp
+  CastShieldInsertChecks.cpp
   DeadArgumentElimination.cpp
   ElimAvailExtern.cpp
   ExtractGV.cpp
@@ -27,6 +28,12 @@ add_llvm_library(LLVMipo
   SampleProfile.cpp
   StripDeadPrototypes.cpp
   StripSymbols.cpp
+  CastSanCHA.cpp
+  CastSanFix.cpp
+  CastSanLayoutBuilder.cpp
+  CastSanMoveBasicBlocks.cpp
+  CastSanUpdateIndices.cpp
+
   WholeProgramDevirt.cpp
 
   ADDITIONAL_HEADER_DIRS

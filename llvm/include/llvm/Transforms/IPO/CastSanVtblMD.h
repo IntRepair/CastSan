@@ -1,15 +1,15 @@
-#ifndef LLVM_TRANSFORMS_IPO_SAFEDISPATCHVTBLMD_H
-#define LLVM_TRANSFORMS_IPO_SAFEDISPATCHVTBLMD_H
+#ifndef LLVM_TRANSFORMS_IPO_CASTSANVTBLMD_H
+#define LLVM_TRANSFORMS_IPO_CASTSANVTBLMD_H
 
 #include "CGCXXABI.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/VTableBuilder.h"
 #include "llvm/Support/Casting.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
-#include "llvm/Transforms/IPO/SafeDispatchTools.h"
-#include "llvm/Transforms/IPO/SafeDispatchMD.h"
-#include "llvm/Transforms/IPO/SafeDispatchGVMd.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
+#include "llvm/Transforms/IPO/CastSanMD.h"
+#include "llvm/Transforms/IPO/CastSanGVMd.h"
 
 #include <iostream>
 #include <string>

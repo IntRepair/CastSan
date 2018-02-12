@@ -23,6 +23,7 @@
 #include "llvm/ADT/SetVector.h"
 #include <memory>
 #include <utility>
+#include "llvm/Transforms/IPO/CastSanCHA.h"
 
 namespace clang {
   class CXXRecordDecl;
@@ -226,6 +227,43 @@ public:
       vtable_component_range;
 
   typedef llvm::DenseMap<BaseSubobject, uint64_t> AddressPointsMapTy;
+  typedef std::vector<const CXXRecordDecl*> inheritance_path_t;
+  typedef std::map<inheritance_path_t, uint64_t> inheritance_vtbl_map_t;
+  typedef std::pair<const CXXRecordDecl*, uint64_t> vtbl_t;
+  typedef std::set<vtbl_t> vtbl_set_t;
+
+  typedef struct _VTableParent {
+    _VTableParent(const vtbl_t &layoutClass,
+     bool _isVirtual,
+     const vtbl_set_t &directParents,
+     const vtbl_set_t &primaryVirtualBases) :
+      layoutClass(layoutClass), directParents(directParents),
+      primaryVirtualBases(primaryVirtualBases) { isVirtual = _isVirtual; }
+    _VTableParent() : directParents(), primaryVirtualBases() { }
+    _VTableParent(const _VTableParent &other) : 
+      layoutClass(other.layoutClass.first, other.layoutClass.second),
+      directParents(other.directParents),
+      primaryVirtualBases(other.primaryVirtualBases) {
+      isVirtual = other.isVirtual;
+    }
+    // For non-virtual parents - the direct parent layout
+    // For virtual parents - the virtual base causing this primitive vtable
+    vtbl_t layoutClass; 
+    // Is this base actually virtual (i.e. parent is virtual and not a primary virtual table)
+    bool isVirtual;
+    // The set of all direct base primitive vtables for this vtable
+    vtbl_set_t directParents; 
+    // The set of all primitive virtual primary base vtables covered by this vtable
+    vtbl_set_t primaryVirtualBases;
+    // directParents.size() > 0
+    // !isVirtual => directParents.size() == 1
+    // !isVirtual => (directParents[0] == base)
+    int64_t numVBases;
+  } VTableParent;
+
+  typedef std::vector<VTableParent> parent_vector_t;
+  typedef std::map<uint64_t, uint64_t> AddressPointOrderMapTy;
+  typedef std::map<uint64_t, std::set<const CXXRecordDecl*> > ParentMapTy;
 
 private:
   uint64_t NumVTableComponents;
@@ -237,7 +275,11 @@ private:
 
   /// \brief Address points for all vtables.
   AddressPointsMapTy AddressPoints;
-
+  ParentMapTy ParentMap;
+  const CXXRecordDecl *MostDerived;
+  const CXXRecordDecl *LayoutClass;
+  AddressPointOrderMapTy AddressPointOrder;
+  inheritance_vtbl_map_t InheritanceMap;
   bool IsMicrosoftABI;
 
 public:
@@ -246,6 +288,9 @@ public:
                uint64_t NumVTableThunks,
                const VTableThunkTy *VTableThunks,
                const AddressPointsMapTy &AddressPoints,
+               const inheritance_vtbl_map_t &_InheritanceMap,
+               const CXXRecordDecl *MostDerived,
+               const CXXRecordDecl *LayoutClass,
                bool IsMicrosoftABI);
   ~VTableLayout();
 
@@ -290,6 +335,28 @@ public:
   const AddressPointsMapTy &getAddressPoints() const {
     return AddressPoints;
   }
+  
+  uint64_t getAddressPoint(uint64_t order) const {
+    return ((AddressPointOrderMapTy) AddressPointOrder)[order];
+  }
+
+  const inheritance_vtbl_map_t &getInheritanceMap() const {
+    return InheritanceMap;
+  }
+
+  uint64_t getOrder(const inheritance_path_t &path) const {
+    assert(InheritanceMap.count(path));
+    return ((inheritance_vtbl_map_t)InheritanceMap)[path];
+  }
+
+  bool isConstructionLayout() const {
+    return MostDerived != LayoutClass;
+  }
+
+  const CXXRecordDecl *getMostDerivedClass() const {
+    return MostDerived;
+  }
+
 };
 
 class VTableContextBase {

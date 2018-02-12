@@ -4,8 +4,8 @@
  */
 
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/SafeDispatch.h"
-#include "llvm/Transforms/IPO/SafeDispatchLayoutBuilder.h"
+#include "llvm/Transforms/IPO/CastSan.h"
+#include "llvm/Transforms/IPO/CastSanLayoutBuilder.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/InstIterator.h"
@@ -22,8 +22,8 @@
 #include "llvm/IR/CallSite.h"
 //#include "llvm/IR/MDBuilder.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
-#include "llvm/Transforms/IPO/SafeDispatchTools.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
 
 //#include "llvm/Transforms/Utils/ValueMapper.h"
 //#include "llvm/Transforms/Utils/Cloning.h"

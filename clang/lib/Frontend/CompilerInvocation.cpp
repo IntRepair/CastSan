@@ -790,6 +790,15 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                       Args.getAllArgValues(OPT_fsanitize_trap_EQ), Diags,
                       Opts.SanitizeTrap);
 
+  //Paul: emit v table checks 
+  Opts.EmitVTBLChecks = Args.hasArg(OPT_femit_vtbl_checks);
+
+  //Paul: emit interleaved v tables
+  Opts.EmitIVTBL = Args.hasArg(OPT_femit_ivtbl);
+
+  Opts.EmitCastChecks = Args.hasArg(OPT_femit_cast_checks);
+
+
   Opts.CudaGpuBinaryFileNames =
       Args.getAllArgValues(OPT_fcuda_include_gpubinary);
 

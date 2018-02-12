@@ -1,5 +1,5 @@
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/SafeDispatch.h"
+#include "llvm/Transforms/IPO/CastSan.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/InstIterator.h"
@@ -15,7 +15,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/CallSite.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchLog.h"
+#include "llvm/Transforms/IPO/CastSanLog.h"
 
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -39,7 +39,7 @@
 
 namespace llvm {
   /**
-   * Module pass for the SafeDispatch Gold Plugin
+   * Module pass for the CastSan Gold Plugin
    */
   class SDBuildCHA : public ModulePass {
   public:
@@ -79,7 +79,7 @@ namespace llvm {
     unsigned vcallMDId;
     std::set<Function*> vthunksToRemove;
 
-    // these should match the structs defined at SafeDispatchVtblMD.h
+    // these should match the structs defined at CastSanVtblMD.h
     struct nmd_sub_t {
       uint64_t    order;
       vtbl_name_t parentName; //string

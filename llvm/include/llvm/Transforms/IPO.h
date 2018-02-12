@@ -219,6 +219,23 @@ ModulePass *createBarrierNoopPass();
 /// to bitsets.
 ModulePass *createLowerBitSetsPass();
 
+/*Paul:
+this are the CastSan passes*/
+
+// CastSan additions
+ModulePass* createCSFixPass();
+ModulePass* createCSBuildCHAPass();
+ModulePass* createCSLayoutBuilderPass(bool interleave = false);
+ModulePass* createCSUpdateIndicesPass();
+ModulePass* createCSMoveBasicBlocksPass();
+ModulePass* createCSSubstModulePass();
+
+/**
+ * CastShield additions
+ */
+ModulePass* createCastSanInsertChecksPass();
+
+
 /// \brief This pass export CFI checks for use by external modules.
 ModulePass *createCrossDSOCFIPass();
 
