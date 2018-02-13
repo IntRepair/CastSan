@@ -463,9 +463,13 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(ConstantStruct, Constant)
 //
 class ConstantMemberPointer : public Constant {
   friend struct ConstantAggrKeyType<ConstantMemberPointer>;
+  void anchor() override;
   ConstantMemberPointer(const ConstantMemberPointer &) = delete;
 
+  friend class Constant;
   std::string sd_className;
+  void destroyConstantImpl();
+  Value *handleOperandChangeImpl(Value *From, Value *To);
 
 protected:
   ConstantMemberPointer(StructType *T, ArrayRef<Constant *> Val);
@@ -508,8 +512,8 @@ public:
     return cast<StructType>(Value::getType());
   }
 
-  void destroyConstant() override;
-  void replaceUsesOfWithOnConstant(Value *From, Value *To, Use *U) override;
+  //void destroyConstant() override;
+  //void replaceUsesOfWithOnConstant(Value *From, Value *To, Use *U) override;
   //void destroyConstant();
   //void replaceUsesOfWithOnConstant(Value *From, Value *To, Use *U);
 
@@ -527,7 +531,8 @@ struct OperandTraits<ConstantMemberPointer> :
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(ConstantMemberPointer, Constant)
 
 
-//===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===
+//
 /// Constant Vector Declarations
 ///
 class ConstantVector : public Constant {

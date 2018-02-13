@@ -66,7 +66,7 @@ HANDLE_CONSTANT(ConstantExpr)
 HANDLE_CONSTANT(ConstantArray)
 HANDLE_CONSTANT(ConstantStruct)
 //Paul
-//HANDLE_CONSTANT(ConstantMemberPointer)
+HANDLE_CONSTANT(ConstantMemberPointer)
 HANDLE_CONSTANT(ConstantVector)
 
 // ConstantData.

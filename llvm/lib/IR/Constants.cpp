@@ -41,10 +41,62 @@ using namespace llvm;
 //===----------------------------------------------------------------------===//
 //                              Constant Class
 //===----------------------------------------------------------------------===//
+typedef LLVMContextImpl::CMPLookupKey sd_mpc_keyT;
+typedef LLVMContextImpl::CMPElement sd_mpc_elemT;
+typedef LLVMContextImpl::MemberPointerConstantsTy sd_mpc_mapT;
+typedef sd_mpc_mapT::iterator sd_mpc_mapitrT;
+
+static inline uint64_t
+sd_getUnsignedConstantValue(Constant* c) {
+  ConstantInt* ci = dyn_cast<ConstantInt>(c);
+  assert(ci);
+
+  int64_t value = ci->getSExtValue();
+  assert(value>0);
+
+  return value;
+}
+
+static inline int64_t
+sd_getSignedConstantValue(Constant* c) {
+  ConstantInt* ci = dyn_cast<ConstantInt>(c);
+  assert(ci);
+
+  return ci->getSExtValue();
+}
+
+static Constant*
+sd_findOrCreate(StructType *ST, ArrayRef<Constant*> V, std::string className) {
+  sd_mpc_mapT& map = ST->getContext().pImpl->MemberPointerConstants;
+
+  uint64_t vtblIndex = sd_getUnsignedConstantValue(V[0]);
+  int64_t thisAdj = sd_getSignedConstantValue(V[1]);
+
+  sd_mpc_keyT key(className, vtblIndex, thisAdj);
+  sd_mpc_mapitrT itr = map.find(key);
+
+  ConstantMemberPointer* mpc = NULL;
+
+  if (itr != map.end()) {
+    mpc = itr->second;
+    assert(mpc->getClassName() == className);
+  } else {
+    ConstantAggrKeyType<ConstantMemberPointer> cakt(V);
+    mpc = cakt.create(ST);
+    mpc->setClassName(className);
+    map[key] = mpc;
+  }
+
+  return mpc;
+}
 
 void Constant::anchor() { }
 
 void ConstantData::anchor() {}
+
+void ConstantFP::anchor() { }
+
+void ConstantMemberPointer::anchor() {}
 
 bool Constant::isNegativeZeroValue() const {
   // Floating point values have an explicit -0.0 value.
@@ -304,9 +356,29 @@ Constant *Constant::getAggregateElement(Constant *Elt) const {
   return nullptr;
 }
 
-void ConstantMemberPointer::destroyConstant() {
+static void
+sd_removeMemberPointer(ConstantMemberPointer* memptr){
+  StructType* ST = memptr->getType();
+  assert(ST);
+
+  uint64_t vtblIndex = sd_getUnsignedConstantValue(
+        memptr->getAggregateElement((unsigned) 0));
+  int64_t thisAdj = sd_getSignedConstantValue(
+        memptr->getAggregateElement((unsigned) 1));
+
+  sd_mpc_mapT& map = ST->getContext().pImpl->MemberPointerConstants;
+
+  sd_mpc_keyT key(memptr->getClassName(), vtblIndex, thisAdj);
+
+  sd_mpc_mapitrT itr = map.find(key);
+  assert(itr != map.end());
+
+  map.erase(itr);
+}
+
+void ConstantMemberPointer::destroyConstantImpl() {
   sd_removeMemberPointer(this);
-  destroyConstant();
+  //destroyConstant();
 }
 
 void Constant::destroyConstant() {
@@ -656,7 +728,6 @@ static const fltSemantics *TypeToFloatSemantics(Type *Ty) {
   return &APFloat::PPCDoubleDouble;
 }
 
-void ConstantFP::anchor() { }
 
 /// get() - This returns a constant fp for the specified value in the
 /// specified type.  This should only be used for simple constant values like
@@ -1078,74 +1149,7 @@ ConstantMemberPointer::ConstantMemberPointer(StructType *T, ArrayRef<Constant *>
   std::copy(V.begin(), V.end(), op_begin());
 }
 
-typedef LLVMContextImpl::CMPLookupKey sd_mpc_keyT;
-typedef LLVMContextImpl::CMPElement sd_mpc_elemT;
-typedef LLVMContextImpl::MemberPointerConstantsTy sd_mpc_mapT;
-typedef sd_mpc_mapT::iterator sd_mpc_mapitrT;
 
-static inline uint64_t
-sd_getUnsignedConstantValue(Constant* c) {
-  ConstantInt* ci = dyn_cast<ConstantInt>(c);
-  assert(ci);
-
-  int64_t value = ci->getSExtValue();
-  assert(value>0);
-
-  return value;
-}
-
-static inline int64_t
-sd_getSignedConstantValue(Constant* c) {
-  ConstantInt* ci = dyn_cast<ConstantInt>(c);
-  assert(ci);
-
-  return ci->getSExtValue();
-}
-
-static Constant*
-sd_findOrCreate(StructType *ST, ArrayRef<Constant*> V, std::string className) {
-  sd_mpc_mapT& map = ST->getContext().pImpl->MemberPointerConstants;
-
-  uint64_t vtblIndex = sd_getUnsignedConstantValue(V[0]);
-  int64_t thisAdj = sd_getSignedConstantValue(V[1]);
-
-  sd_mpc_keyT key(className, vtblIndex, thisAdj);
-  sd_mpc_mapitrT itr = map.find(key);
-
-  ConstantMemberPointer* mpc = NULL;
-
-  if (itr != map.end()) {
-    mpc = itr->second;
-    assert(mpc->getClassName() == className);
-  } else {
-    ConstantAggrKeyType<ConstantMemberPointer> cakt(V);
-    mpc = cakt.create(ST);
-    mpc->setClassName(className);
-    map[key] = mpc;
-  }
-
-  return mpc;
-}
-
-static void
-sd_removeMemberPointer(ConstantMemberPointer* memptr){
-  StructType* ST = memptr->getType();
-  assert(ST);
-
-  uint64_t vtblIndex = sd_getUnsignedConstantValue(
-        memptr->getAggregateElement((unsigned) 0));
-  int64_t thisAdj = sd_getSignedConstantValue(
-        memptr->getAggregateElement((unsigned) 1));
-
-  sd_mpc_mapT& map = ST->getContext().pImpl->MemberPointerConstants;
-
-  sd_mpc_keyT key(memptr->getClassName(), vtblIndex, thisAdj);
-
-  sd_mpc_mapitrT itr = map.find(key);
-  assert(itr != map.end());
-
-  map.erase(itr);
-}
 
 // ConstantMemberPointer accessors.
 Constant *ConstantMemberPointer::get(StructType *ST, ArrayRef<Constant*> V, std::string className) {
@@ -1507,17 +1511,42 @@ void ConstantVector::destroyConstantImpl() {
   getType()->getContext().pImpl->VectorConstants.remove(this);
 }
 
-void ConstantMemberPointer::replaceUsesOfWithOnConstant(Value *From, Value *To,
-                                                 Use *U) {
+Value *ConstantMemberPointer::handleOperandChangeImpl(Value *From, Value *To) {
   assert(isa<Constant>(To) && "Cannot make Constant refer to non-constant!");
   Constant *ToC = cast<Constant>(To);
 
-  unsigned OperandToUpdate = U->OperandList;
+  Use *OperandList = getOperandList();
 
-  assert(getOperand(OperandToUpdate) == From && "ReplaceAllUsesWith broken!");
-  assert(! (ToC->isNullValue() || isa<UndefValue>(ToC)));
+  SmallVector<Constant*, 8> Values;
+  Values.reserve(getNumOperands());  // Build replacement struct.
 
-  setOperand(OperandToUpdate, ToC);
+  // Fill values with the modified operands of the constant struct.  Also,
+  // compute whether this turns into an all-zeros struct.
+  unsigned NumUpdated = 0;
+  bool AllSame = true;
+  unsigned OperandNo = 0;
+  for (Use *O = OperandList, *E = OperandList + getNumOperands(); O != E; ++O) {
+    Constant *Val = cast<Constant>(O->get());
+    if (Val == From) {
+      OperandNo = (O - OperandList);
+      Val = ToC;
+      ++NumUpdated;
+      setOperand(OperandNo, ToC);
+    }
+    Values.push_back(Val);
+    AllSame &= Val == ToC;
+  }
+
+  if (AllSame && ToC->isNullValue())
+    return ConstantAggregateZero::get(getType());
+
+  if (AllSame && isa<UndefValue>(ToC))
+    return UndefValue::get(getType());
+
+  // Update to the new value.
+  //return getContext().pImpl->MemberPointerConstants.replaceOperandsInPlace(
+  //    Values, this, From, ToC, NumUpdated, OperandNo);
+  return nullptr;
 }
 
 
