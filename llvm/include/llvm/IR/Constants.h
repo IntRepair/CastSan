@@ -510,6 +510,8 @@ public:
 
   void destroyConstant() override;
   void replaceUsesOfWithOnConstant(Value *From, Value *To, Use *U) override;
+  //void destroyConstant();
+  //void replaceUsesOfWithOnConstant(Value *From, Value *To, Use *U);
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Value *V) {

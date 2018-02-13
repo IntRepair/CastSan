@@ -306,7 +306,7 @@ Constant *Constant::getAggregateElement(Constant *Elt) const {
 
 void ConstantMemberPointer::destroyConstant() {
   sd_removeMemberPointer(this);
-  destroyConstantImpl();
+  destroyConstant();
 }
 
 void Constant::destroyConstant() {
@@ -1512,7 +1512,7 @@ void ConstantMemberPointer::replaceUsesOfWithOnConstant(Value *From, Value *To,
   assert(isa<Constant>(To) && "Cannot make Constant refer to non-constant!");
   Constant *ToC = cast<Constant>(To);
 
-  unsigned OperandToUpdate = U-OperandList;
+  unsigned OperandToUpdate = U->OperandList;
 
   assert(getOperand(OperandToUpdate) == From && "ReplaceAllUsesWith broken!");
   assert(! (ToC->isNullValue() || isa<UndefValue>(ToC)));

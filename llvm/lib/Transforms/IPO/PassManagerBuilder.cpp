@@ -756,7 +756,7 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
   }
 
   if (EmitIVTBLs) {
-	  PM.add(llvm::createCastShieldInsertChecksPass()); //P6
+	  PM.add(llvm::createCastSanInsertChecksPass()); //P6
   }
 
   if (VerifyInput)

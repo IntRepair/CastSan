@@ -231,7 +231,7 @@ ModulePass* createCSMoveBasicBlocksPass();
 ModulePass* createCSSubstModulePass();
 
 /**
- * CastShield additions
+ * CastSan additions
  */
 ModulePass* createCastSanInsertChecksPass();
 

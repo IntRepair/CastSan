@@ -40,20 +40,20 @@
 
 using namespace llvm;
 
-struct CastShieldInsertChecks : public ModulePass {
+struct CastSanInsertChecks : public ModulePass {
 	static char ID;
 
-	CastShieldInsertChecks() : ModulePass(ID) {
-		sd_print("initializing CastShieldInsertChecks pass\n");
-		initializeCastShieldInsertChecksPass(*PassRegistry::getPassRegistry());
+	CastSanInsertChecks() : ModulePass(ID) {
+		sd_print("initializing CastSanInsertChecks pass\n");
+		initializeCastSanInsertChecksPass(*PassRegistry::getPassRegistry());
 	}
 
-	virtual ~CastShieldInsertChecks() {
-		sd_print("deleting CastShieldInsertChecks pass\n");
+	virtual ~CastSanInsertChecks() {
+		sd_print("deleting CastSanInsertChecks pass\n");
 	}
 
 	bool runOnModule(Module &M) {
-		sd_print("\nP5.2 Started running CastShieldInsertChecks pass ...\n");
+		sd_print("\nP5.2 Started running CastSanInsertChecks pass ...\n");
 		sd_print("P5.2 Starting final range checks additions for casts ...\n");
       
 		/**
@@ -152,7 +152,7 @@ struct CastShieldInsertChecks : public ModulePass {
       
 		//finished adding all the range checks, now print some statistics.
 		//in the interleaving paper the average number of ranges per call site was close to 1 (1,005).
-		sd_print("\n P5.2 Finished running CastShieldInsertChecks pass...\n");
+		sd_print("\n P5.2 Finished running CastSandInsertChecks pass...\n");
 
 		sd_print("\n ---P5.2 Cast Subst Statistics--- \n");
 
@@ -167,10 +167,10 @@ struct CastShieldInsertChecks : public ModulePass {
 	}
 };
 
-char CastShieldInsertChecks::ID = 0;
+char CastSanInsertChecks::ID = 0;
 
-ModulePass* llvm::createCastShieldInsertChecksPass() {
-	return new CastShieldInsertChecks();
+ModulePass* llvm::createCastSanInsertChecksPass() {
+	return new CastSanInsertChecks();
 }
 
-INITIALIZE_PASS(CastShieldInsertChecks, "caic", "Module pass for substituting the intrinsics holding a cast metadata by range checks.", false, false)
+INITIALIZE_PASS(CastSanInsertChecks, "caic", "Module pass for substituting the intrinsics holding a cast metadata by range checks.", false, false)
