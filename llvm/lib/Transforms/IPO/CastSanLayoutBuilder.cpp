@@ -367,7 +367,7 @@ void SDLayoutBuilder::createThunkFunctions(Module& M, const vtbl_name_t& rootNam
         
         //go over each bb inside the function
         for(BasicBlock:: iterator i_itr = bb_itr->begin(); i_itr != bb_itr->end(); i_itr++) {
-          Instruction* inst = i_itr;
+	      Instruction* inst = static_cast<Instruction*>(i_itr);
           
           //cast to CallInstrunction and assign the instruction to CI 
           //check that the called function by thic call instrunction equals  sd_vcall_indexF
@@ -1286,7 +1286,7 @@ void SDLayoutBuilder::removeOldLayouts(Module &M) {
 
     //sd_isVthunk checks that the name contains the substrings "_ZTcv" or "_ZTc""
     if (sd_isVthunk(itr->getName()) && (itr->user_begin() == itr->user_end())) {
-      vthunksToRemove.insert(itr); //collect the v thunks 
+	    vthunksToRemove.insert(static_cast<llvm::Function*>(itr)); //collect the v thunks 
     }
   }
 

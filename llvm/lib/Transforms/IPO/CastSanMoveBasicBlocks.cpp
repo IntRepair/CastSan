@@ -70,7 +70,7 @@ namespace {
           if (name == "sd.check.fail" || name.find("sd.fastcheck.fail") != std::string::npos) {
 
             //Paul: collect the bb which will be removed
-            toMove.push_back(bbIt);
+	          toMove.push_back(static_cast<llvm::BasicBlock*>(bbIt));
           }
         }
         

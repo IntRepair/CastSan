@@ -208,20 +208,20 @@ void SDBuildCHA::buildClouds(Module &M) {
   for(auto itr = M.getNamedMDList().begin(); itr != M.getNamedMDList().end(); itr++) {
     
     //Paul: get all metadata of this module
-    NamedMDNode* md = itr;
+	  //NamedMDNode* md = itr.getNodePtr();
 
     // only look at the modules we created and in 
     // which we added our class metadata. 
-    if(! md->getName().startswith(SD_MD_CLASSINFO))
+    if(! itr->getName().startswith(SD_MD_CLASSINFO))
       continue;
 
-    sd_print("\nGOT METADATA: %s\n", md->getName().data());
+    sd_print("\nGOT METADATA: %s\n", itr->getName().data());
 
     // Paul: extractMetadata() extracts the metadata from each module
     // and puts it into this vector, this metadata was previously added 
     // inside CastSanVtblMD.h, in: sd_insertVtableMD() function
     // this function is called for each generated v table, during code generation  
-    extractMetadata(md, infoVec);
+    extractMetadata(static_cast<NamedMDNode*>(itr), infoVec);
   }
 
   for (const nmd_t& info : infoVec)
