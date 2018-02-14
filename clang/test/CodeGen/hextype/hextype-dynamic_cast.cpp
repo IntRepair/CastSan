@@ -7,7 +7,7 @@ class parent {
 public:
   int t;
   int tt[100];
-  virtual int foo() { int a[100]; return 1; }
+  virtual int foo() { int a[100]; }
 };
 
 class child : public parent, public Derived {

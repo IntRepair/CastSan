@@ -35,6 +35,15 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Transforms/Utils/HexTypeUtil.h"
 
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/Instructions.h"
+
+#include "llvm/Transforms/IPO/SafeDispatchMD.h"
+#include "llvm/Transforms/IPO/SafeDispatchTools.h"
+#include "llvm/Transforms/IPO/SafeDispatchVtblMD.h"
+#include <vector>
+#define WORD_WIDTH 8
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -45,6 +54,113 @@ llvm::cl::opt<bool> ClEnhanceDynamicCast(
   llvm::cl::Hidden, llvm::cl::init(false));
 
 namespace {
+  /*Paul: all functions which were here added start with "sd_"
+  
+  */
+
+//Paul: get v table index, used to get the v table index. this method adds the corresponding def contained
+// in the Intrinsic.td into the generated code during code genneration 
+// this function is used during pass 5, P5
+// This function is called from ItaniumCXXABI.cpp 
+bool sd_needGlobalVar(clang::CodeGen::CGCXXABI* CGM, const clang::CXXRecordDecl* RD) {
+  std::string className = CGM->GetClassMangledName(RD);
+  return className.find("_GLOBAL__N_") != std::string::npos;
+}
+
+//Paul: get the new indices from the old ones
+llvm::Value* sd_getNewIndFromOld(CodeGenModule& CGM, 
+                               CGBuilderTy& builder,
+                     llvm::GlobalVariable* VTableGV, 
+                       const std::string& className,
+                                   int64_t oldIndex) {
+
+  llvm::Module& M = CGM.getModule();
+  llvm::LLVMContext& C = M.getContext();
+
+  llvm::MDNode* md = sd_getClassNameMetadata(className, M, VTableGV);
+  llvm::Value* mdValue = llvm::MetadataAsValue::get(C, md);
+  
+  //used to return the v table index 
+  return builder.CreateCall2(CGM.getIntrinsic(llvm::Intrinsic::sd_get_vtbl_index), //Paul: see Intrinsics.td file
+              llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(C), oldIndex),
+              mdValue);
+}
+
+//Paul: check if v pointer is in range, this method adds the corresponding def contained
+// in the Intrinsic.td into the generated code during code genneration 
+// this function is used during pass 5, P5
+llvm::Value* sd_IsVPtrInRange(CodeGenModule& CGM, 
+                            CGBuilderTy& builder,
+                  llvm::GlobalVariable* VTableGV, 
+                    const std::string& className,
+                             llvm::Value *oldPtr,
+            const std::string& preciseClassName) {
+
+  llvm::Module& M = CGM.getModule();
+  llvm::LLVMContext& C = M.getContext();
+  llvm::MDNode* preciseMD;
+
+  llvm::MDNode* md = sd_getClassNameMetadata(className, M, VTableGV);
+
+  if (className == preciseClassName) { //Paul: put the class name of the v ptr in a call.
+    preciseMD = md;
+  } else {
+    preciseMD = sd_getClassNameMetadata(preciseClassName, M, NULL);
+  }
+
+  llvm::Value* mdValue = llvm::MetadataAsValue::get(C, md);
+  llvm::Value* castPointer = builder.CreatePointerCast(oldPtr, CGM.Int8PtrTy);
+  
+  //this is the base class of the object which is calling 
+  llvm::Value* preciseMDValue = llvm::MetadataAsValue::get(C, preciseMD);
+
+  //add a call to Intrinsics::sd_check_vtbl
+  return builder.CreateCall3(
+              CGM.getIntrinsic(llvm::Intrinsic::sd_check_vtbl), //Paul: see Intrinsics.td file
+              castPointer, //the casted old pointer
+              mdValue,     //this is the class name of the calling object 
+              preciseMDValue); //this is the base class of the calling object.
+}
+
+//Paul: get range start, this method adds the corresponding def contained
+// in the Intrinsic.td into the generated code during code genneration 
+// this function is used during pass 5, P5
+llvm::Value* sd_getRangeStart(CodeGenModule& CGM, 
+                            CGBuilderTy& builder,
+                  llvm::GlobalVariable* VTableGV, 
+                    const std::string& className) {
+
+  llvm::Module& M = CGM.getModule();
+  llvm::LLVMContext& C = M.getContext();
+
+  llvm::MDNode* md = sd_getClassNameMetadata(className, M, VTableGV); //params: className, Module and v table global variable
+  llvm::Value* mdValue = llvm::MetadataAsValue::get(C, md);
+  llvm::Value* Args[] = { mdValue }; //the arguments passed to the function underneath 
+
+  //Paul: see Intrinsics.td file
+  return builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::sd_vtbl_range_start), Args);
+}
+
+//Paul: get range end, this method adds the corresponding def contained
+// in the Intrinsic.td into the generated code during code genneration 
+// this function is used during pass 5, P5
+llvm::Value* sd_getRangeEnd(CodeGenModule& CGM, 
+                          CGBuilderTy& builder,
+                llvm::GlobalVariable* VTableGV, 
+                  const std::string& className) {
+
+  llvm::Module& M = CGM.getModule();
+  llvm::LLVMContext& C = M.getContext();
+
+  llvm::MDNode* md = sd_getClassNameMetadata(className, M, VTableGV);
+  llvm::Value* mdValue = llvm::MetadataAsValue::get(C, md);
+  llvm::Value* Args[] = { mdValue }; //the arguments passed to the function underneath 
+
+  return builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::sd_vtbl_range_end), //Paul: see Intrinsics.td file
+                            Args); //this Args are the parameters of the above sd_vtbl_range_end 
+ }
+}
+
 class ItaniumCXXABI : public CodeGen::CGCXXABI {
   /// VTables - All the vtables which have been defined.
   llvm::DenseMap<const CXXRecordDecl *, llvm::GlobalVariable *> VTables;
@@ -299,10 +415,13 @@ public:
   }
 
   llvm::Value *performThisAdjustment(CodeGenFunction &CGF, Address This,
-                                     const ThisAdjustment &TA) override;
+                                     const ThisAdjustment &TA,
+                                     const CXXRecordDecl *RD) override;
 
   llvm::Value *performReturnAdjustment(CodeGenFunction &CGF, Address Ret,
-                                       const ReturnAdjustment &RA) override;
+                                       const ReturnAdjustment &RA,
+                                       const CXXRecordDecl *RD) override;
+
 
   size_t getSrcArgforCopyCtor(const CXXConstructorDecl *,
                               FunctionArgList &Args) const override {
@@ -598,6 +717,17 @@ llvm::Value *ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
     VTableOffset = Builder.CreateSub(VTableOffset, ptrdiff_1);
   VTable = Builder.CreateGEP(VTable, VTableOffset);
 
+  llvm::GetElementPtrInst* vtableGepInst = dyn_cast<llvm::GetElementPtrInst>(VTable);
+  assert(vtableGepInst);
+  std::string Name = CGM.getCXXABI().GetClassMangledName(RD);
+
+  //Paul: used to set some metadata 
+  if (sd_isVtableDecl(nullptr, &CGF.CGM, RD) && RD->isDynamicClass()) {
+    llvm::GlobalVariable* VTable = sd_needGlobalVar(this,RD) ? this->getAddrOfVTable(RD,CharUnits()) : NULL;
+    vtableGepInst->setMetadata(SD_MD_MEMPTR_OPT, sd_getClassNameMetadata(Name, CGF.CGM.getModule(), VTable));
+  }
+
+
   // Load the virtual function to call.
   VTable = Builder.CreateBitCast(VTable, FTy->getPointerTo()->getPointerTo());
   llvm::Value *VirtualFn =
@@ -830,6 +960,10 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       MemPtr[0] = llvm::ConstantInt::get(CGM.PtrDiffTy, VTableOffset + 1);
       MemPtr[1] = llvm::ConstantInt::get(CGM.PtrDiffTy,
                                          ThisAdjustment.getQuantity());
+    
+      std::string className = GetClassMangledName(MD->getParent());
+	if (CGM.getCodeGenOpts().EmitIVTBL)
+      return llvm::ConstantMemberPointer::getAnon(MemPtr, className);
     }
   } else {
     const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
@@ -849,6 +983,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     MemPtr[1] = llvm::ConstantInt::get(CGM.PtrDiffTy,
                                        (UseARMMethodPtrABI ? 2 : 1) *
                                        ThisAdjustment.getQuantity());
+    return llvm::ConstantStruct::getAnon(MemPtr);
   }
   
   return llvm::ConstantStruct::getAnon(MemPtr);
@@ -1226,7 +1361,25 @@ llvm::Value *ItaniumCXXABI::EmitTypeid(CodeGenFunction &CGF,
       CGF.GetVTablePtr(ThisPtr, StdTypeInfoPtrTy->getPointerTo(), ClassDecl);
 
   // Load the type info.
-  Value = CGF.Builder.CreateConstInBoundsGEP1_64(Value, -1ULL);
+  llvm::LoadInst* loadInst = dyn_cast<llvm::LoadInst>(Value);
+  assert(loadInst);
+
+  // put mangled vtable name into a string
+  CXXRecordDecl* RD = SrcRecordTy->getAsCXXRecordDecl();
+  std::string Name = CGM.getCXXABI().GetClassMangledName(RD);
+  
+  //Paul: this is used when emiting the interleaved v tables 
+  if (CGM.getCodeGenOpts().EmitIVTBL && sd_isVtableDecl(nullptr, &CGF.CGM, RD) && RD->isDynamicClass()) {
+    llvm::GlobalVariable* VTableGV = sd_needGlobalVar(this,RD) ?
+          this->getAddrOfVTable(RD,CharUnits()) : NULL;
+
+    llvm::Value* newRTTIInd = sd_getNewIndFromOld(CGM, CGF.Builder, VTableGV, Name, -1);
+    Value = CGF.Builder.CreateGEP(Value, newRTTIInd, SD_MD_TYPEID);
+  } else {
+    // Load the type info.
+    Value = CGF.Builder.CreateConstInBoundsGEP1_64(Value, -1ULL);
+  }
+
   return CGF.Builder.CreateAlignedLoad(Value, CGF.getPointerAlign());
 }
 
@@ -1317,7 +1470,63 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastCall(
     }
   }
   else {
+    // put mangled vtable name into a string
+  std::string className = CGM.getCXXABI().GetClassMangledName(SrcDecl);
+  
+  //Paul: used to call a function which is located outside a module 
+  if (CGM.getCodeGenOpts().EmitIVTBL && sd_isVtableDecl(nullptr, &CGF.CGM, SrcDecl) && SrcDecl->isDynamicClass()) {
+    // in LLVM, we cannot call a function declared outside of the module
+    // so add a declaration here
+    llvm::Module* module = & CGM.getModule();
+    assert(module);
+    llvm::LLVMContext& C = module->getContext();
+
+    // easy access to types
+    llvm::Type* i64 = llvm::IntegerType::getInt64Ty(C);
+    llvm::Type* i8ptr = llvm::IntegerType::getInt8PtrTy(C);
+
+     // 1. object address
+     // 2. type of the starting object
+     // 3. desired target type
+     // 4. src2det ptrdiff
+     // 5. rttiOff ptrdiff
+     // 6. ottOff  ptrdiff
+    llvm::Type* types[6] = {i8ptr, i8ptr, i8ptr, i64, i64, i64};
+
+    // create the function type
+    llvm::FunctionType* dyncastFunType = llvm::FunctionType::get(i8ptr, types, false);
+
+    // declare the function
+    llvm::Constant* dyncastFun =
+        module->getOrInsertFunction(SD_DYNCAST_FUNC_NAME, dyncastFunType);
+
+    // create the argument list for calling the function
+    // initialize this with the original call's arguments
+    std::vector<llvm::Value*> arguments(args, args + sizeof(args) / sizeof(args[0]));
+
+    // create the metadata
+    llvm::GlobalVariable* VTableGV = sd_needGlobalVar(this, SrcDecl) ?
+          this->getAddrOfVTable(SrcDecl, CharUnits()) : NULL;
+
+    // used to multiply the new indices
+    llvm::Value* wordWidth = llvm::ConstantInt::get(i64, WORD_WIDTH);
+
+    // find the new rtti index
+    llvm::Value* newRTTI = sd_getNewIndFromOld(CGM, CGF.Builder, VTableGV, className, -1);
+    arguments.push_back(CGF.Builder.CreateMul(newRTTI,wordWidth));
+
+    // find the new ott index
+    llvm::Value* newOTT = sd_getNewIndFromOld(CGM, CGF.Builder, VTableGV, className, -2);
+    arguments.push_back(CGF.Builder.CreateMul(newOTT,wordWidth));
+
+    // call the new dynamic cast function
+    Value = CGF.EmitNounwindRuntimeCall(dyncastFun, arguments);
+  
+  //if no interleaving should be performed 
+  } else {
     Value = CGF.EmitNounwindRuntimeCall(getItaniumDynamicCastFn(CGF), args);
+  }
+
     Value = CGF.Builder.CreateBitCast(Value, DestLTy);
 
     /// C++ [expr.dynamic.cast]p9:
@@ -1383,9 +1592,28 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF,
       CGM.getItaniumVTableContext().getVirtualBaseOffsetOffset(ClassDecl,
                                                                BaseClassDecl);
 
-  llvm::Value *VBaseOffsetPtr =
-    CGF.Builder.CreateConstGEP1_64(VTablePtr, VBaseOffsetOffset.getQuantity(),
-                                   "vbase.offset.ptr");
+  llvm::Value *VBaseOffsetPtr = NULL;
+
+  std::string className = this->GetClassMangledName(ClassDecl);
+
+  //Paul: modify the v base offset pointer when interleaving v tables 
+  if (CGM.getCodeGenOpts().EmitIVTBL && sd_isVtableDecl(nullptr, &CGF.CGM, ClassDecl) && ClassDecl->isDynamicClass()) {
+    llvm::GlobalVariable* VTableGV = sd_needGlobalVar(this,ClassDecl) ? getAddrOfVTable(ClassDecl, CharUnits()) : NULL;
+    int64_t vbaseOffset = VBaseOffsetOffset.getQuantity();
+
+    llvm::Value* newVbaseInd = sd_getNewIndFromOld(CGF.CGM, CGF.Builder,
+                                                VTableGV, className,
+                                                vbaseOffset / WORD_WIDTH);
+    llvm::LLVMContext& C = CGF.CGM.getLLVMContext();
+    llvm::Value* wordWidth = llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(C), WORD_WIDTH);
+    llvm::Value* newVbase = CGF.Builder.CreateMul(newVbaseInd, wordWidth);
+    VBaseOffsetPtr = CGF.Builder.CreateGEP(VTablePtr, newVbase, SD_MD_VBASE);
+  } else {
+    VBaseOffsetPtr =
+        CGF.Builder.CreateConstGEP1_64(VTablePtr, VBaseOffsetOffset.getQuantity(),
+                                       "vbase.offset.ptr");
+  }
+
   VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
                                              CGM.PtrDiffTy->getPointerTo());
 
@@ -1564,6 +1792,13 @@ void ItaniumCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
 
   if (!VTable->isDeclarationForLinker())
     CGM.EmitVTableBitSetEntries(VTable, VTLayout);
+  std::cerr << "emitVTableDefinitions for " << RD->getQualifiedNameAsString() << "\n";
+
+  //Paul: insert the v table module, calls into SafeDispatchVtblMD.h
+  //this create a new module node with the v table definition attached to the each 
+  //class definition
+  sd_insertVtableMD(&CGM, VTable, &VTLayout, RD, NULL);
+
 }
 
 bool ItaniumCXXABI::isVirtualOffsetNeededForVTableField(
@@ -1643,6 +1878,9 @@ llvm::GlobalVariable *ItaniumCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
   getMangleContext().mangleCXXVTable(RD, Out);
 
   ItaniumVTableContext &VTContext = CGM.getItaniumVTableContext();
+  std::cerr << "getAddrOfVTable: " << RD->getQualifiedNameAsString() << "\n";
+  std::cerr << "layout : " << &(VTContext.getVTableLayout(RD)) << "\n";
+
   llvm::ArrayType *ArrayType = llvm::ArrayType::get(
       CGM.Int8PtrTy, VTContext.getVTableLayout(RD).getNumVTableComponents());
 
@@ -1658,6 +1896,152 @@ llvm::GlobalVariable *ItaniumCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
   return VTable;
 }
 
+#include <iostream>
+
+//Paul: add checked v table code, this method adds the corresponding def contained
+// in the Intrinsic.td into the generated code during code genneration 
+static llvm::Value* sd_getCheckedVTable(CodeGenModule &CGM, 
+                    CodeGenFunction &CGF, 
+                    const CXXMethodDecl *MD, 
+                    llvm::Value *&VTableAP, 
+                    const CXXRecordDecl *preciseType) {
+
+  assert(MD && "Non-null method decl");
+  assert(MD->isInstance() && "Shouldn't see a static method");
+
+  // get the vtable
+  const CXXRecordDecl* RD = MD->getParent();
+  llvm::GlobalVariable* VTable = sd_needGlobalVar(&CGM.getCXXABI(), RD) ?
+              CGM.getCXXABI().getAddrOfVTable(RD, CharUnits()) :
+              NULL;
+
+  std::string Name = CGM.getCXXABI().GetClassMangledName(MD->getParent());
+
+  std::cerr << "get checked VTable in " <<
+    dyn_cast<NamedDecl>(CGF.CurFuncDecl)->getQualifiedNameAsString() <<
+    " for class " << Name << " for method " << MD->getQualifiedNameAsString() << std::endl; 
+
+  llvm::BasicBlock *fastCheckFailed = CGF.createBasicBlock("vtblCheck.fastpath.fail");
+  llvm::BasicBlock *checkFailed = CGF.createBasicBlock("vtblCheck.fail");
+  llvm::BasicBlock *checkSuccess = CGF.createBasicBlock("vtblCheck.success");
+  llvm::BasicBlock *checkDone = CGF.createBasicBlock("vtblCheck.done");
+  llvm::Value *isInsideRange;
+
+  // check if vtbl is inside the range
+  if (preciseType) {
+    //the last parameter is the class name of the object base class 
+    isInsideRange = sd_IsVPtrInRange(CGM, CGF.Builder, VTable, Name, VTableAP, CGM.getCXXABI().GetClassMangledName(preciseType));
+  } else {
+    isInsideRange = sd_IsVPtrInRange(CGM, CGF.Builder, VTable, Name, VTableAP, Name);
+  }
+
+  // do the branch
+  CGF.Builder.CreateCondBr(isInsideRange, checkSuccess, fastCheckFailed);
+
+  llvm::Module& M = CGM.getModule();
+  llvm::LLVMContext& C = M.getContext();
+  //llvm::Type *ctrT = llvm::IntegerType::getInt64Ty(C);
+
+  CGF.EmitBlock(fastCheckFailed);
+  /*
+  CGF.Builder.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
+    M.getOrInsertGlobal("_sd_checks_failed", ctrT),
+    llvm::ConstantInt::get(ctrT, 1),
+    llvm::SequentiallyConsistent,
+    llvm::CrossThread);
+  */
+
+  llvm::Type* i8ptr = llvm::Type::getInt8PtrTy(C);
+  llvm::Type* argTs[] = { i8ptr, i8ptr };
+  llvm::FunctionType *vptr_safeT = llvm::FunctionType::get(llvm::Type::getInt1Ty(C), argTs, false);
+  llvm::Constant *vptr_safeF = M.getOrInsertFunction("_Z9vptr_safePKvPKc", vptr_safeT);
+  llvm::Value* slowPathSuccess = CGF.Builder.CreateCall2(vptr_safeF,
+                                                         CGF.Builder.CreateBitCast(VTableAP, i8ptr),
+                                                         CGF.Builder.CreateGlobalStringPtr(Name));
+
+  CGF.Builder.CreateCondBr(slowPathSuccess, checkDone, checkFailed);
+
+  CGF.EmitBlock(checkFailed);
+  CGF.Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::trap)); //Paul: see Intrinsics.td file
+  CGF.Builder.CreateUnreachable();
+
+  // Continue function emittance in the vtblCheck.success bb
+  CGF.EmitBlock(checkSuccess);
+  
+  /*
+  CGF.Builder.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
+    M.getOrInsertGlobal("_sd_checks_succeeded", ctrT),
+    llvm::ConstantInt::get(ctrT, 1),
+    llvm::SequentiallyConsistent,
+    llvm::CrossThread);
+  */
+  
+  CGF.Builder.CreateBr(checkDone);
+
+  CGF.EmitBlock(checkDone);
+
+  ItaniumVTableContext &Ctx = CGM.getItaniumVTableContext();
+  const VTableLayout &Layout = Ctx.getVTableLayout(RD);
+  //  std::cerr << "inserting vtable md in get checked vtbl for " << RD->getQualifiedNameAsString() << "\n";
+  //  sd_insertVtableMD(&CGM, NULL, &Layout, RD, NULL);
+  return VTableAP;
+}
+
+//Paul: check the v table range, a second variant for the above method                   
+static llvm::Value* sd_getCheckedVTable2(CodeGenModule &CGM, 
+                                       CodeGenFunction &CGF, 
+                                    const CXXMethodDecl *MD, 
+                                     llvm::Value *&VTableAP, 
+                           const CXXRecordDecl *preciseType) {
+
+  assert(MD && "Non-null method decl");
+  assert(MD->isInstance() && "Shouldn't see a static method");
+
+  // get the vtable
+  const CXXRecordDecl* RD = MD->getParent();
+  llvm::GlobalVariable* VTable = sd_needGlobalVar(&CGM.getCXXABI(), RD) ?
+              CGM.getCXXABI().getAddrOfVTable(RD, CharUnits()) :
+              NULL;
+  
+  //class name of the object making the call
+  std::string ClassName = CGM.getCXXABI().GetClassMangledName(MD->getParent());
+
+  //class name of the object making the call
+  std::string PreciseName = (preciseType ? CGM.getCXXABI().GetClassMangledName(preciseType) : ClassName);
+
+  std::cerr << "get checked VTable in " <<
+    dyn_cast<NamedDecl>(CGF.CurFuncDecl)->getQualifiedNameAsString() <<
+    " for class " << ClassName << "(more precisely " << PreciseName << ")" << " for method " << MD->getQualifiedNameAsString() << std::endl; 
+
+  llvm::Module& M = CGM.getModule();
+  llvm::LLVMContext& C = M.getContext();
+  llvm::MDNode* preciseMD;
+
+  llvm::MDNode* md = sd_getClassNameMetadata(ClassName, M, VTable);
+
+  if (ClassName == PreciseName) {
+    preciseMD = md;
+  } else {
+    preciseMD = sd_getClassNameMetadata(PreciseName, M, NULL);
+  }
+
+  llvm::Value* mdValue = llvm::MetadataAsValue::get(C, md);
+  llvm::Value* castPointer = CGF.Builder.CreatePointerCast(VTableAP, CGM.Int8PtrTy);
+
+  //this is the name of the base class of the object making the call to a virtual funtion 
+  llvm::Value* preciseMDValue = llvm::MetadataAsValue::get(C, preciseMD);
+
+  llvm::Value* intr = CGF.Builder.CreateCall3(
+              CGM.getIntrinsic(llvm::Intrinsic::sd_get_checked_vptr), //Paul: see Intrinsics.td file
+              castPointer,
+              mdValue,
+              preciseMDValue);
+
+  return CGF.Builder.CreatePointerCast(intr, VTableAP->getType());
+}
+
+
+//Paul: get the virtual function pointer 
 llvm::Value *ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                       GlobalDecl GD,
                                                       Address This,
@@ -1668,11 +2052,35 @@ llvm::Value *ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
   auto *MethodDecl = cast<CXXMethodDecl>(GD.getDecl());
   llvm::Value *VTable = CGF.GetVTablePtr(This, Ty, MethodDecl->getParent());
 
+// rkici : insert vfunptr check here
+  const CXXMethodDecl *MD = cast<CXXMethodDecl>(GD.getDecl());
+
+  // put mangled vtable name into a string
+  const CXXRecordDecl* RD = MD->getParent();
+  std::string Name = this->GetClassMangledName(RD);
+
+  if (CGM.getCodeGenOpts().EmitVTBLChecks && sd_isVtableDecl(nullptr, &CGF.CGM, RD)) {
+    VTable = sd_getCheckedVTable2(CGM, CGF, MD, VTable, preciseType);
+  }
+
   CGF.EmitBitSetCodeForVCall(MethodDecl->getParent(), VTable, Loc);
 
   uint64_t VTableIndex = CGM.getItaniumVTableContext().getMethodVTableIndex(GD);
-  llvm::Value *VFuncPtr =
-      CGF.Builder.CreateConstInBoundsGEP1_64(VTable, VTableIndex, "vfn");
+  
+  llvm::Value* VFuncPtr = NULL;
+
+  if (CGM.getCodeGenOpts().EmitIVTBL && sd_isVtableDecl(nullptr, &CGF.CGM, RD) && RD->isDynamicClass()) {
+    llvm::GlobalVariable* VTableGV = sd_needGlobalVar(this,RD) ?
+          getAddrOfVTable(RD, CharUnits()) : NULL;
+
+    llvm::Value* newIndex = sd_getNewIndFromOld(CGM, CGF.Builder, VTableGV, Name, VTableIndex);
+    llvm::Value* arr[1] = {newIndex};
+    VFuncPtr = CGF.Builder.CreateGEP(VTable, arr);
+  } else {
+    VFuncPtr = CGF.Builder.CreateConstInBoundsGEP1_64(VTable, VTableIndex, "vfn");
+  }
+
+  //note
   return CGF.Builder.CreateAlignedLoad(VFuncPtr, CGF.getPointerAlign());
 }
 
@@ -1717,7 +2125,8 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
                                           Address InitialPtr,
                                           int64_t NonVirtualAdjustment,
                                           int64_t VirtualAdjustment,
-                                          bool IsReturnAdjustment) {
+                                          bool IsReturnAdjustment,
+                                          const CXXRecordDecl* RD) {
   if (!NonVirtualAdjustment && !VirtualAdjustment)
     return InitialPtr.getPointer();
 
@@ -1738,8 +2147,30 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
     Address VTablePtrPtr = CGF.Builder.CreateElementBitCast(V, CGF.Int8PtrTy);
     llvm::Value *VTablePtr = CGF.Builder.CreateLoad(VTablePtrPtr);
 
-    llvm::Value *OffsetPtr =
-        CGF.Builder.CreateConstInBoundsGEP1_64(VTablePtr, VirtualAdjustment);
+    //llvm::Value *OffsetPtr =
+    //    CGF.Builder.CreateConstInBoundsGEP1_64(VTablePtr, VirtualAdjustment);
+    std::string Name = CGF.CGM.getCXXABI().GetClassMangledName(RD);
+    llvm::LLVMContext& C = CGF.CGM.getLLVMContext();
+    llvm::Value* newAdjustment;
+
+    //Paul: in case interleaved v tables should be emitted compute a new adjustment 
+    if (CGF.CGM.getCodeGenOpts().EmitIVTBL && sd_isVtableDecl(nullptr, &CGF.CGM, RD) && RD->isDynamicClass()) {
+      
+      //Paul: v call index is computed and the call is added here
+      newAdjustment = CGF.Builder.CreateCall(
+                  CGF.CGM.getIntrinsic(llvm::Intrinsic::sd_get_vcall_index), //Paul: see Intrinsics.td file
+                    llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(C),
+                                                         VirtualAdjustment),
+                                                                SD_MD_VCALL);
+    } else {
+      newAdjustment = llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(C), VirtualAdjustment);
+    }
+    
+    //GEP get element pointer 
+    llvm::Value *OffsetPtr = CGF.Builder.CreateGEP(VTablePtr, newAdjustment);
+    //llvm::Value *OffsetPtr =
+    //CGF.Builder.CreateConstInBoundsGEP1_64(VTablePtr, VirtualAdjustment);
+
 
     OffsetPtr = CGF.Builder.CreateBitCast(OffsetPtr, PtrDiffTy->getPointerTo());
 
@@ -1766,18 +2197,19 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
 
 llvm::Value *ItaniumCXXABI::performThisAdjustment(CodeGenFunction &CGF,
                                                   Address This,
-                                                  const ThisAdjustment &TA) {
+                                                  const ThisAdjustment &TA,
+                                                  const CXXRecordDecl *RD) {
   return performTypeAdjustment(CGF, This, TA.NonVirtual,
                                TA.Virtual.Itanium.VCallOffsetOffset,
-                               /*IsReturnAdjustment=*/false);
+                               /*IsReturnAdjustment=*/false, RD);
 }
 
 llvm::Value *
 ItaniumCXXABI::performReturnAdjustment(CodeGenFunction &CGF, Address Ret,
-                                       const ReturnAdjustment &RA) {
+                                       const ReturnAdjustment &RA, const CXXRecordDecl *RD) {
   return performTypeAdjustment(CGF, Ret, RA.NonVirtual,
                                RA.Virtual.Itanium.VBaseOffsetOffset,
-                               /*IsReturnAdjustment=*/true);
+                               /*IsReturnAdjustment=*/true, RD);
 }
 
 void ARMCXXABI::EmitReturnFromThunk(CodeGenFunction &CGF,

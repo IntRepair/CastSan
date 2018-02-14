@@ -355,6 +355,7 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   // rather than that of the end of the function's scope '}'.
   ApplyDebugLocation AL(*this, Loc);
   EmitFunctionEpilog(*CurFnInfo, EmitRetDbgLoc, EndLoc);
+  EmitDeferredVTableFailBlocks();
   EmitEndEHSpec(CurCodeDecl);
 
   assert(EHStack.empty() &&
@@ -1868,6 +1869,23 @@ Address CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
 }
 
 CodeGenFunction::CGCapturedStmtInfo::~CGCapturedStmtInfo() { }
+
+void CodeGenFunction::addDeferredVTableFailBlock(llvm::BasicBlock *bb) {
+  struct DeferredVTableFailBlock dfb;
+  dfb.bb = bb;
+
+  DeferredVTableFailBlocks.push_back(dfb);
+}
+
+void CodeGenFunction::EmitDeferredVTableFailBlocks() {
+  for (DeferredVTableFailBlockV::iterator i = DeferredVTableFailBlocks.begin();
+       i != DeferredVTableFailBlocks.end(); i++) {
+    EmitBlock(i->bb);
+
+    Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::trap));
+    Builder.CreateUnreachable();
+  }
+}
 
 CodeGenFunction::SanitizerScope::SanitizerScope(CodeGenFunction *CGF)
     : CGF(CGF) {

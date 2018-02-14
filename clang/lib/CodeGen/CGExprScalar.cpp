@@ -1443,6 +1443,14 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       CGF.GetAddressOfDerivedClass(Base, DerivedClassDecl,
                                    CE->path_begin(), CE->path_end(),
                                    CGF.ShouldNullCheckClassCastValue(CE));
+    
+    // if both objects in this conversion are Polymorphic, thus have vTables, we can perform a simple range check
+    // based on the position of the actual vPointer of the "Base" object in this conversion at runtime.
+    const CXXRecordDecl * BaseClassDecl = E->getType()->getPointeeCXXRecordDecl();
+
+    if(CGF.CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic())
+      CGF.EmitVTableCastCheck(V, DerivedClassDecl, BaseClassDecl);
+
 
     // C++11 [expr.static.cast]p11: Behavior is undefined if a downcast is
     // performed and the object is not of the derived type.

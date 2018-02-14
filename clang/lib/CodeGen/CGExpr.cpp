@@ -34,6 +34,7 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Transforms/Utils/SanitizerStats.h"
 #include "llvm/Transforms/Utils/HexTypeUtil.h"
+#include "llvm/Transforms/IPO/SafeDispatchTools.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -504,6 +505,70 @@ bool CodeGenFunction::sanitizePerformTypeCheck() const {
          SanOpts.has(SanitizerKind::Alignment) |
          SanOpts.has(SanitizerKind::ObjectSize) |
          SanOpts.has(SanitizerKind::Vptr);
+}
+
+void CodeGenFunction::EmitVTableCastCheck(llvm::Value *V, const CXXRecordDecl *DerivedClassDecl,
+                          const CXXRecordDecl *BaseClassDecl) {
+
+
+  // get the highest in class-hierarchy primary virtual base of the "Base" in the BaseToDerived conversion.
+  // The range in the vtable of this virtual base will be used for the runtime range check
+  const CXXRecordDecl * VBaseDecl = BaseClassDecl;
+  std::string BaseMangledName = CGM.getCXXABI().GetClassMangledName(BaseClassDecl);
+  ASTContext & Context = BaseClassDecl->getASTContext();
+  const ASTRecordLayout * Layout = &Context.getASTRecordLayout(VBaseDecl);
+
+  while(!Layout->hasOwnVFPtr()) {
+    VBaseDecl = Layout->getPrimaryBase();
+	if (!VBaseDecl ) {
+		std::cerr << "CastCheck: " << BaseMangledName << " does not have it's own Vtable, but also no Parent with one." << std::endl;
+		return;
+	}
+    Layout = &Context.getASTRecordLayout(VBaseDecl);
+  }
+
+  // Determine the mangled name of the derived class (target of Cast Operation)
+  // and also of the primary virtual class (highest in class-hierarchy with VTable)
+  // These names will be used to uniquely identify the correct VTable ranges in
+  // the llvm pass (P4 of SafeDispatch)
+  std::string DerivedMangledName = CGM.getCXXABI().GetClassMangledName(DerivedClassDecl);
+  std::string VBaseMangledName = CGM.getCXXABI().GetClassMangledName(VBaseDecl);
+
+  if (!sd_isVtableName(DerivedMangledName) || ! sd_isVtableName(VBaseMangledName))
+  {
+    printf("Cast Check: Cast from %s to %s: one is not eligible for checking.");
+    return;
+  }
+
+  printf("Cast Check: inserting cast check from %s to %s", VBaseMangledName.c_str(), DerivedMangledName.c_str());
+
+  llvm::Value * isNull = Builder.CreateIsNull(V);
+
+  // create a Load-Operation for the first VTable pointer of the to-be-casted object.
+  // this Value holds a reference to the VPointer at runtime and will be used in the range checks
+  llvm::BasicBlock *TrapBlock = createBasicBlock("cast.check.trap");
+  llvm::BasicBlock *CheckBlock = createBasicBlock("cast.check");
+  llvm::BasicBlock *ContBlock = createBasicBlock("cast.check.cont");
+
+  Builder.CreateCondBr(isNull, ContBlock, CheckBlock);
+
+  EmitBlock(CheckBlock);
+
+  llvm::Value * VPointer = GetVTablePtr(V, Int8PtrTy);
+
+  // insert the Intrinsic holding all Metadata needed to create a range check
+  llvm::Value * CastCheck = InsertCastInfo(VBaseMangledName, DerivedMangledName, VPointer);
+
+  // create basic
+
+  Builder.CreateCondBr(CastCheck, ContBlock, TrapBlock);
+
+  EmitBlock(TrapBlock);
+  Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::trap));
+  Builder.CreateUnreachable();
+  //Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::donothing));
+
+  EmitBlock(ContBlock);
 }
 
 void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
@@ -3666,7 +3731,8 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   case CK_BaseToDerived: {
     const RecordType *DerivedClassTy = E->getType()->getAs<RecordType>();
     auto *DerivedClassDecl = cast<CXXRecordDecl>(DerivedClassTy->getDecl());
-
+    const CXXRecordDecl *BaseClassDecl = cast<CXXRecordDecl>(E->getType()->getAs<RecordType>()->getDecl());
+    
     LValue LV = EmitLValue(E->getSubExpr());
 
     // Perform the base-to-derived conversion
@@ -3674,6 +3740,10 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
       GetAddressOfDerivedClass(LV.getAddress(), DerivedClassDecl,
                                E->path_begin(), E->path_end(),
                                /*NullCheckValue=*/false);
+
+    if(CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic() && BaseClassDecl->isPolymorphic())
+      EmitVTableCastCheck(LV.getAddress(), DerivedClassDecl, BaseClassDecl);
+
 
     // C++11 [expr.static.cast]p2: Behavior is undefined if a downcast is
     // performed and the object is not of the derived type.

@@ -25,6 +25,10 @@
 
 #define MAXLEN 10000
 
+#include <iostream>
+
+#include "llvm/Transforms/IPO/SafeDispatchGVMd.h" 
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -33,6 +37,46 @@ llvm::cl::opt<bool> ClHandlePlacementNew("handle-placement-new",
                                            "handle placement new"),
                                          llvm::cl::Hidden,
                                          llvm::cl::init(false));
+
+// inserts given class name strings and the subexpression value as intrinsics
+// will be used in Pass 4 of SafeDispatchUpdateIndices
+llvm::Value *CodeGenFunction::InsertCastInfo(std::string VBaseClassName, 
+                                               std::string PreciseClassName,
+                                               llvm::Value * VPointer) { 
+  llvm::Module& M = CGM.getModule(); 
+  llvm::LLVMContext& C = M.getContext(); 
+  llvm::MDNode * VBaseMD = sd_getClassNameMetadata(VBaseClassName, M); 
+  llvm::MDNode * PreciseMD = sd_getClassNameMetadata(PreciseClassName, M); 
+ 
+  llvm::Value * VBaseMDValue = llvm::MetadataAsValue::get(C, VBaseMD); 
+  llvm::Value * PreciseMDValue = llvm::MetadataAsValue::get(C, PreciseMD); 
+ 
+ 
+  return Builder.CreateCall3( 
+              CGM.getIntrinsic(llvm::Intrinsic::cast_info), 
+                                        VBaseMDValue, 
+                                        PreciseMDValue,
+                                        VPointer); 
+} 
+
+static const CXXRecordDecl* getPerciseType(const Expr *Base) {
+  const ImplicitCastExpr *ICE;
+
+  if ((ICE = dyn_cast<ImplicitCastExpr>(Base))) {
+    const Type *subType = ICE->getSubExpr()->getType().getTypePtr();
+    const CXXRecordDecl *RD;
+
+    if (isa<PointerType>(subType)) {
+      subType = (dyn_cast<PointerType>(subType)->getPointeeType().getTypePtr());
+    }
+
+    if ((RD = subType->getAsCXXRecordDecl())) {
+      return RD;
+    }
+  }
+
+  return NULL;
+}
 
 static RequiredArgs
 commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
@@ -265,6 +309,9 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
   } else if (UseVirtualCall) {
     Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty,
                                                        CE->getLocStart());
+
+    //Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty, getPerciseType(Base));
+
   } else {
     if (SanOpts.has(SanitizerKind::CFINVCall) &&
         MD->getParent()->isDynamicClass()) {

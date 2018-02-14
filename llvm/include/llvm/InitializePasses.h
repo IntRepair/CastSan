@@ -324,6 +324,8 @@ void initializeLoopLoadEliminationPass(PassRegistry&);
 void initializeFunctionImportPassPass(PassRegistry &);
 void initializeLoopVersioningPassPass(PassRegistry &);
 void initializeWholeProgramDevirtPass(PassRegistry &);
+
+//the next two passes are from HexType
 void initializeHexTypePass(PassRegistry&);
 void initializeHexTypeTreePass(PassRegistry&);
 
