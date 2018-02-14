@@ -38,9 +38,9 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 
-#include "llvm/Transforms/IPO/SafeDispatchMD.h"
-#include "llvm/Transforms/IPO/SafeDispatchTools.h"
-#include "llvm/Transforms/IPO/SafeDispatchVtblMD.h"
+#include "llvm/Transforms/IPO/CastSanMD.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
+#include "llvm/Transforms/IPO/CastSanVtblMD.h"
 #include <vector>
 #define WORD_WIDTH 8
 
