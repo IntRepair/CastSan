@@ -92,11 +92,11 @@ sd_findOrCreate(StructType *ST, ArrayRef<Constant*> V, std::string className) {
 
 void Constant::anchor() { }
 
-void ConstantData::anchor() {}
+void ConstantData::anchor() { }
 
 void ConstantFP::anchor() { }
 
-void ConstantMemberPointer::anchor() {}
+void ConstantMemberPointer::anchor() { }
 
 bool Constant::isNegativeZeroValue() const {
   // Floating point values have an explicit -0.0 value.
@@ -378,7 +378,7 @@ sd_removeMemberPointer(ConstantMemberPointer* memptr){
 
 void ConstantMemberPointer::destroyConstantImpl() {
   sd_removeMemberPointer(this);
-  //destroyConstant();
+  destroyConstant();
 }
 
 void Constant::destroyConstant() {
@@ -1546,7 +1546,7 @@ Value *ConstantMemberPointer::handleOperandChangeImpl(Value *From, Value *To) {
   // Update to the new value.
   //return getContext().pImpl->MemberPointerConstants.replaceOperandsInPlace(
   //    Values, this, From, ToC, NumUpdated, OperandNo);
-  return nullptr;
+  return To;
 }
 
 

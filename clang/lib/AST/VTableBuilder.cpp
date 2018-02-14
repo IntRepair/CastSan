@@ -1065,16 +1065,9 @@ public:
   void buildParentsInformation() {
   }
 
-  /// isBuildingConstructionVTable - Return whether this vtable builder is
-  /// building a construction vtable.
-  bool isBuildingConstructorVTable() const { 
-    return MostDerivedClass != LayoutClass;
-  }
-
   const inheritance_vtbl_map_t &getInheritanceMap() const {
     return InheritanceMap;
   }
-
 
   uint64_t getNumThunks() const {
     return Thunks.size();

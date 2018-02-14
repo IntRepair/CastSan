@@ -223,12 +223,12 @@ ModulePass *createLowerBitSetsPass();
 this are the CastSan passes*/
 
 // CastSan additions
-ModulePass* createCSFixPass();
-ModulePass* createCSBuildCHAPass();
-ModulePass* createCSLayoutBuilderPass(bool interleave = false);
-ModulePass* createCSUpdateIndicesPass();
-ModulePass* createCSMoveBasicBlocksPass();
-ModulePass* createCSSubstModulePass();
+ModulePass* createSDFixPass();
+ModulePass* createSDBuildCHAPass();
+ModulePass* createSDLayoutBuilderPass(bool interleave = false);
+ModulePass* createSDUpdateIndicesPass();
+ModulePass* createSDMoveBasicBlocksPass();
+ModulePass* createSDSubstModulePass();
 
 /**
  * CastSan additions

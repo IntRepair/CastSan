@@ -206,12 +206,13 @@ namespace {
       
       /*Paul:
       used to link all passes*/
-      (void) llvm::createCSFixPass();
-      (void) llvm::createCSBuildCHAPass();
-      (void) llvm::createCSLayoutBuilderPass();
-      (void) llvm::createCSUpdateIndicesPass();
-      (void) llvm::createCSMoveBasicBlocksPass();
-      (void) llvm::createCSSubstModulePass();
+      (void) llvm::createSDFixPass();
+      (void) llvm::createSDBuildCHAPass();
+      (void) llvm::createSDLayoutBuilderPass();
+      (void) llvm::createSDUpdateIndicesPass();
+      (void) llvm::createSDMoveBasicBlocksPass();
+      (void) llvm::createSDSubstModulePass();
+      
       /**
        * CastSan Pass for inserting the checks.
        */

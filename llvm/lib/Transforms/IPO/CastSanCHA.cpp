@@ -254,7 +254,7 @@ void SDBuildCHA::buildClouds(Module &M) {
 		  else
 		  {
 			  if (type->hasName())
-				  sd_print("FakeVT: %s, will be handled\n", type->classMangledName.data());
+				  sd_print("FakeVT: %s, will be handled\n", type->clangMangledName.data());
 			  else
 			  {
 				  duplicates.push(i);
