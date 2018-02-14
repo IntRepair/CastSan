@@ -2455,7 +2455,6 @@ ItaniumVTableContext::computeVTableRelatedInformation(const CXXRecordDecl *RD) {
 
   ItaniumVTableBuilder Builder(*this, RD, CharUnits::Zero(),
                                /*MostDerivedClassIsVirtual=*/0, RD);
-  Entry = CreateVTableLayout(Builder);
 
   std::cerr << "Create vtable layout for " << RD->getQualifiedNameAsString() << "\n";
   VTableLayouts[RD] = CreateVTableLayout(Builder);
