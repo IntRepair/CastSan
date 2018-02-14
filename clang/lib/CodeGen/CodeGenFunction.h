@@ -1979,7 +1979,7 @@ public:
   /// \brief Emit a check that the VTable Pointer of \p V is in the interleaved
   /// VTable-Range of \p DerivedClassDecl in the first VTable of \p BaseClassDecl.
   /// This relies on interleaved VTables by SafeDispatch.
-  void EmitVTableCastCheck(llvm::Value *V, const CXXRecordDecl *DerivedClassDecl,
+  void EmitVTableCastCheck(Address V, const CXXRecordDecl *DerivedClassDecl,
                            const CXXRecordDecl *BaseClassDecl);
 
   /// \brief Emit a check that \p V is the address of storage of the

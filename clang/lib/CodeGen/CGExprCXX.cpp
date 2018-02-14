@@ -52,11 +52,11 @@ llvm::Value *CodeGenFunction::InsertCastInfo(std::string VBaseClassName,
   llvm::Value * PreciseMDValue = llvm::MetadataAsValue::get(C, PreciseMD); 
  
  
-  return Builder.CreateCall3( 
+  return Builder.CreateCall( 
               CGM.getIntrinsic(llvm::Intrinsic::cast_info), 
-                                        VBaseMDValue, 
+                                        {VBaseMDValue, 
                                         PreciseMDValue,
-                                        VPointer); 
+                                        VPointer}); 
 } 
 
 static const CXXRecordDecl* getPerciseType(const Expr *Base) {
@@ -310,7 +310,7 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
     //Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty,
     //                                                   CE->getLocStart());
 
-    Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty, getPerciseType(Base));
+	  Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty, getPerciseType(Base), CE->getLocStart());
 
   } else {
     if (SanOpts.has(SanitizerKind::CFINVCall) &&

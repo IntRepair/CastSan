@@ -41,8 +41,9 @@ struct CatchTypeInfo;
 
 /// \brief Implements C++ ABI-specific code generation functions.
 class CGCXXABI {
-protected:
+public:
   CodeGenModule &CGM;
+protected:
   std::unique_ptr<MangleContext> MangleCtx;
 
   CGCXXABI(CodeGenModule &CGM)
@@ -391,6 +392,7 @@ public:
                                                  GlobalDecl GD,
                                                  Address This,
                                                  llvm::Type *Ty,
+                                                 const CXXRecordDecl *RD,
                                                  SourceLocation Loc) = 0;
 
   /// Emit the ABI-specific virtual destructor call.

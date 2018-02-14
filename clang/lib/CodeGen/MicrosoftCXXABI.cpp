@@ -286,6 +286,7 @@ public:
 
   llvm::Value *getVirtualFunctionPointer(CodeGenFunction &CGF, GlobalDecl GD,
                                          Address This, llvm::Type *Ty,
+                                         const CXXRecordDecl *RD,
                                          SourceLocation Loc) override;
 
   llvm::Value *EmitVirtualDestructorCall(CodeGenFunction &CGF,
@@ -1811,6 +1812,7 @@ llvm::Value *MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                         GlobalDecl GD,
                                                         Address This,
                                                         llvm::Type *Ty,
+                                                        const CXXRecordDecl *RD,
                                                         SourceLocation Loc) {
   GD = GD.getCanonicalDecl();
   CGBuilderTy &Builder = CGF.Builder;
@@ -1846,7 +1848,7 @@ llvm::Value *MicrosoftCXXABI::EmitVirtualDestructorCall(
       Dtor, StructorType::Deleting);
   llvm::Type *Ty = CGF.CGM.getTypes().GetFunctionType(*FInfo);
   llvm::Value *Callee = getVirtualFunctionPointer(
-      CGF, GD, This, Ty, CE ? CE->getLocStart() : SourceLocation());
+	  CGF, GD, This, Ty, NULL, CE ? CE->getLocStart() : SourceLocation());
 
   ASTContext &Context = getContext();
   llvm::Value *ImplicitParam = llvm::ConstantInt::get(

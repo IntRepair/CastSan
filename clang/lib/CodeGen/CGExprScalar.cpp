@@ -1449,7 +1449,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     const CXXRecordDecl * BaseClassDecl = E->getType()->getPointeeCXXRecordDecl();
 
     if(CGF.CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic())
-      CGF.EmitVTableCastCheck(V, DerivedClassDecl, BaseClassDecl);
+      CGF.EmitVTableCastCheck(Derived, DerivedClassDecl, BaseClassDecl);
 
 
     // C++11 [expr.static.cast]p11: Behavior is undefined if a downcast is

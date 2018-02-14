@@ -146,7 +146,7 @@ static RValue PerformReturnAdjustment(CodeGenFunction &CGF,
   auto ClassAlign = CGF.CGM.getClassPointerAlignment(ClassDecl);
   ReturnValue = CGF.CGM.getCXXABI().performReturnAdjustment(CGF,
                                             Address(ReturnValue, ClassAlign),
-                                            Thunk.Return);
+                                                            Thunk.Return, RD);
 
   if (NullCheckValue) {
     CGF.Builder.CreateBr(AdjustEnd);
@@ -227,7 +227,7 @@ CodeGenFunction::GenerateVarArgsThunk(llvm::Function *Fn,
   // Adjust "this", if necessary.
   Builder.SetInsertPoint(&*ThisStore);
   llvm::Value *AdjustedThisPtr =
-      CGM.getCXXABI().performThisAdjustment(*this, ThisPtr, Thunk.This);
+	  CGM.getCXXABI().performThisAdjustment(*this, ThisPtr, Thunk.This, RD);
   ThisStore->setOperand(0, AdjustedThisPtr);
 
   if (!Thunk.Return.isEmpty()) {
@@ -302,11 +302,12 @@ void CodeGenFunction::EmitCallAndReturnForThunk(llvm::Value *Callee,
   assert(isa<CXXMethodDecl>(CurGD.getDecl()) &&
          "Please use a new CGF for this thunk");
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(CurGD.getDecl());
+  const CXXRecordDecl *RD = MD->getParent();
 
   // Adjust the 'this' pointer if necessary
   llvm::Value *AdjustedThisPtr =
     Thunk ? CGM.getCXXABI().performThisAdjustment(
-                          *this, LoadCXXThisAddress(), Thunk->This)
+	    *this, LoadCXXThisAddress(), Thunk->This, RD)
           : LoadCXXThis();
 
   if (CurFnInfo->usesInAlloca()) {
@@ -370,7 +371,7 @@ void CodeGenFunction::EmitCallAndReturnForThunk(llvm::Value *Callee,
   RValue RV = EmitCall(*CurFnInfo, Callee, Slot, CallArgs, MD, &CallOrInvoke);
 
   // Consider return adjustment if we have ThunkInfo.
-  const CXXRecordDecl *RD = MD->getParent();
+  //const CXXRecordDecl *RD = MD->getParent();
   if (Thunk && !Thunk->Return.isEmpty())
     RV = PerformReturnAdjustment(*this, ResultType, RV, *Thunk, RD);
   else if (llvm::CallInst* Call = dyn_cast<llvm::CallInst>(CallOrInvoke))

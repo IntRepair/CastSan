@@ -34,7 +34,7 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Transforms/Utils/SanitizerStats.h"
 #include "llvm/Transforms/Utils/HexTypeUtil.h"
-#include "llvm/Transforms/IPO/SafeDispatchTools.h"
+#include "llvm/Transforms/IPO/CastSanTools.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -507,7 +507,7 @@ bool CodeGenFunction::sanitizePerformTypeCheck() const {
          SanOpts.has(SanitizerKind::Vptr);
 }
 
-void CodeGenFunction::EmitVTableCastCheck(llvm::Value *V, const CXXRecordDecl *DerivedClassDecl,
+void CodeGenFunction::EmitVTableCastCheck(Address V, const CXXRecordDecl *DerivedClassDecl,
                           const CXXRecordDecl *BaseClassDecl) {
 
 
@@ -542,7 +542,7 @@ void CodeGenFunction::EmitVTableCastCheck(llvm::Value *V, const CXXRecordDecl *D
 
   printf("Cast Check: inserting cast check from %s to %s", VBaseMangledName.c_str(), DerivedMangledName.c_str());
 
-  llvm::Value * isNull = Builder.CreateIsNull(V);
+  llvm::Value * isNull = Builder.CreateIsNull(V.getPointer());
 
   // create a Load-Operation for the first VTable pointer of the to-be-casted object.
   // this Value holds a reference to the VPointer at runtime and will be used in the range checks
@@ -554,7 +554,7 @@ void CodeGenFunction::EmitVTableCastCheck(llvm::Value *V, const CXXRecordDecl *D
 
   EmitBlock(CheckBlock);
 
-  llvm::Value * VPointer = GetVTablePtr(V, Int8PtrTy);
+  llvm::Value * VPointer = GetVTablePtr(V, Int8PtrTy, DerivedClassDecl);
 
   // insert the Intrinsic holding all Metadata needed to create a range check
   llvm::Value * CastCheck = InsertCastInfo(VBaseMangledName, DerivedMangledName, VPointer);
