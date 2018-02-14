@@ -27,7 +27,7 @@
 
 #include <iostream>
 
-#include "llvm/Transforms/IPO/SafeDispatchGVMd.h" 
+#include "llvm/Transforms/IPO/CastSanGVMd.h" 
 
 using namespace clang;
 using namespace CodeGen;
