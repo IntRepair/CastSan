@@ -961,7 +961,7 @@ void CodeGen::runLTOPasses() {
   PMB.EmitIVTBLs = options::RunSDIVTBLPass;
   PMB.EmitOVTBLs = options::RunSDOVTBLPass;
 
-  PMB.OptLevel = optifons::OptLevel;
+  PMB.OptLevel = options::OptLevel;
   PMB.FunctionIndex = CombinedIndex;
   PMB.populateLTOPassManager(passes);
   passes.run(*M);

@@ -568,11 +568,11 @@ llvm::User* sd_unfold_map_cb(llvm::User* root,
 
 static void sd_rewriteMPtrToIntrinsics(llvm::Module& M, CodeGenModule &CGM) {
   for(llvm::Module::iterator f_itr = M.begin(); f_itr != M.end(); f_itr++) {
-    llvm::Function* f = f_itr;
+	  llvm::Function* f = static_cast<llvm::Function*>(f_itr);
     for(llvm::Function::iterator bb_itr = f->begin(); bb_itr != f->end(); bb_itr++) {
-      llvm::BasicBlock* bb = bb_itr;
+	  llvm::BasicBlock* bb = static_cast<llvm::BasicBlock*>(bb_itr);
       for(llvm::BasicBlock::iterator i_itr = bb->begin(); i_itr != bb->end(); i_itr++) {
-        llvm::Instruction* inst = i_itr;
+	    llvm::Instruction* inst = static_cast<llvm::Instruction*>(i_itr);
         assert(inst);
 
         for(unsigned i=0; i < inst->getNumOperands(); i++) {
