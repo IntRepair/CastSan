@@ -307,10 +307,10 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
   if (const CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(MD)) {
     Callee = CGM.GetAddrOfFunction(GlobalDecl(Ctor, Ctor_Complete), Ty);
   } else if (UseVirtualCall) {
-    Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty,
-                                                       CE->getLocStart());
+    //Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty,
+    //                                                   CE->getLocStart());
 
-    //Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty, getPerciseType(Base));
+    Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty, getPerciseType(Base));
 
   } else {
     if (SanOpts.has(SanitizerKind::CFINVCall) &&
