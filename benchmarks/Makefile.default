@@ -1,0 +1,57 @@
+LIBS = $(patsubst lib%.a,-l%,$(LIB_NAMES))
+OPT  = -O0
+
+ifeq ($(NO_LTO),OK)
+CC      = g++
+LD      = $(CC)
+CFLAGS  = $(OPT) -g
+LDFLAGS =
+AR      = ar
+else
+ifeq ($(VTV), OK)
+	CC      = g++-4.9
+	LD      = $(CC)
+	CFLAGS  = $(OPT) -fvtable-verify=std -rdynamic -Wl,-z,relro -m64
+	LDFLAGS = $(OPT) -fvtable-verify=std -rdynamic -Wl,-z,relro -m64
+	LDLIBS  =
+else
+ifeq ($(LLVMCFI), OK)
+	CC      = $(LLVM_BUILD_DIR)/bin/clang++
+	LD      = $(CC)
+	CFLAGS  = $(OPT) -flto -fsanitize=cfi-vcall
+	LDFLAGS = $(OPT)
+				-Wl,-plugin $(LLVM_BUILD_DIR)/../lib/LLVMgold.so \
+				-Wl,-plugin-opt=mcpu=x86-64 \
+				-Wl,-plugin-opt=save-temps
+	LDLIBS  =
+	AR      = $(LLVM_DIR)/scripts/ar
+else
+	CC      = $(LLVM_BUILD_DIR)/bin/clang++
+	LD      = $(CC)
+	CFLAGS  = $(OPT) -flto -femit-ivtbl -femit-vtbl-checks -femit-cast-checks
+	LDFLAGS = $(OPT) -B $(BINUTILS_BUILD_DIR)/gold \
+				-Wl,-plugin $(LLVM_BUILD_DIR)/lib/LLVMgold.so \
+				-Wl,-plugin-opt=mcpu=x86-64 \
+				-Wl,-plugin-opt=save-temps \
+				-Wl,-plugin-opt=sd-ivtbl
+	LDLIBS  = -L$(LLVM_DIR)/libdyncast -ldyncast
+	AR      = $(LLVM_DIR)/scripts/ar
+endif
+endif
+endif
+
+ALL_OBJS = $(OBJS) main.o
+
+all:	main
+
+main :	$(ALL_OBJS) $(LIB_NAMES)
+		$(LD) $(LDFLAGS) -o main -L. $^ $(LDLIBS) $(LIBS)
+
+%.o: 	%.cpp
+		$(CC) $(CFLAGS) -g -c $< -o $@
+
+clean:
+		@rm -f *.o *.a main
+
+clean-all: clean
+		@rm -f *.bc *.ll output.txt
