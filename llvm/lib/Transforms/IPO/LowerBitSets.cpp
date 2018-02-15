@@ -33,6 +33,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace llvm;
+#include <iostream>
 
 #define DEBUG_TYPE "lowerbitsets"
 

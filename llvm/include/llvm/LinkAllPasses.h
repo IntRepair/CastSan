@@ -203,6 +203,21 @@ namespace {
       X.add(nullptr, 0, llvm::AAMDNodes()); // for -print-alias-sets
       (void) llvm::AreStatisticsEnabled();
       (void) llvm::sys::RunningOnValgrind();
+      
+      /*Paul:
+      used to link all passes*/
+      (void) llvm::createSDFixPass();
+      (void) llvm::createSDBuildCHAPass();
+      (void) llvm::createSDLayoutBuilderPass();
+      (void) llvm::createSDUpdateIndicesPass();
+      (void) llvm::createSDMoveBasicBlocksPass();
+      (void) llvm::createSDSubstModulePass();
+      
+      /**
+       * CastSan Pass for inserting the checks.
+       */
+      (void) llvm::createCastSanInsertChecksPass();
+
     }
   } ForcePassLinking; // Force link by creating a global definition.
 }

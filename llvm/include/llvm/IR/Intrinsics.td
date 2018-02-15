@@ -660,12 +660,83 @@ def int_masked_scatter: Intrinsic<[],
                                   [IntrReadWriteArgMem]>;
 
 // Intrinsics to support bit sets.
-def int_bitset_test : Intrinsic<[llvm_i1_ty], [llvm_ptr_ty, llvm_metadata_ty],
+//def int_bitset_test : Intrinsic<[llvm_i1_ty], [llvm_ptr_ty, llvm_metadata_ty],
+//                                [IntrNoMem]>;
+//===---------------------------------SD-------------------------------------===//
+// Intrinsics to support bit sets. Paul: add new intrinsic functions
+// Paul functions (next 9) are used to check the ranges of the v tables and are 
+// inserted before the v table dispatches.
+// These definitions have counterparts in the file ItaniumCXXABI.cpp.
+// Check these in ItaniumCXXABI.cpp in order to understand what these are doing.
+// So basically with the help of these functions all the needed values and checks 
+// can be performed from the ItaniumCXXABI which generated code that can access all the
+// needed stuff inside the generated program. 
+//===----------------------------------------------------------------------===//
+
+def int_bitset_test : Intrinsic<[llvm_i1_ty], 
+             [llvm_ptr_ty, llvm_metadata_ty],
                                 [IntrNoMem]>;
+
+def int_sd_check_vtbl : Intrinsic<[llvm_i1_ty], 
+                                  [llvm_ptr_ty, 
+                              llvm_metadata_ty,    
+                             llvm_metadata_ty],
+                                  [IntrNoMem]>;
+
+def int_sd_get_vtbl_index : Intrinsic<[llvm_i64_ty], 
+                   [llvm_i64_ty, llvm_metadata_ty],
+                                      [IntrNoMem]>;
+
+def int_sd_get_vcall_index : Intrinsic<[llvm_i64_ty], 
+                                       [llvm_i64_ty],
+                                        [IntrNoMem]>;
+
+def int_sd_vtbl_range_start : Intrinsic<[llvm_i64_ty], 
+                                   [llvm_metadata_ty],
+                                         [IntrNoMem]>;
+
+def int_sd_vtbl_range_end : Intrinsic<[llvm_i64_ty], 
+                                 [llvm_metadata_ty],
+                                       [IntrNoMem]>;
+
+def int_sd_subst_check_range : Intrinsic<[llvm_i1_ty],
+                                         [llvm_ptr_ty,
+                                          llvm_i64_ty,
+                                          llvm_i64_ty,
+                                         llvm_i64_ty],
+                                         [IntrNoMem]>;
+
+def int_sd_subst_vtbl_index : Intrinsic<[llvm_i64_ty], 
+                                        [llvm_i64_ty],
+                                         [IntrNoMem]>;
+
+def int_sd_get_checked_vptr: Intrinsic<[llvm_ptr_ty], 
+                                        [llvm_ptr_ty, 
+                                    llvm_metadata_ty, 
+                                   llvm_metadata_ty],
+                                      [IntrNoMem]>;
+
+//===----------------------------------------------------------------------===//
+// Cast Check Intrinsics
+//===----------------------------------------------------------------------===//
+
+def int_cast_info: Intrinsic<[llvm_i1_ty],
+                             [llvm_metadata_ty,
+                              llvm_metadata_ty,
+                              llvm_ptr_ty],
+                             [IntrNoMem]>;
+
+def int_subst_cast_check: Intrinsic<[llvm_i1_ty],
+                                    [llvm_i64_ty,
+                                     llvm_i64_ty,
+                                     llvm_i64_ty,
+                                     llvm_ptr_ty],
+                                    [IntrNoMem]>;
 
 //===----------------------------------------------------------------------===//
 // Target-specific intrinsics
 //===----------------------------------------------------------------------===//
+
 
 include "llvm/IR/IntrinsicsPowerPC.td"
 include "llvm/IR/IntrinsicsX86.td"

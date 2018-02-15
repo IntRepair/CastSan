@@ -403,6 +403,7 @@ public:
   enum ValueTy {
 #define HANDLE_VALUE(Name) Name##Val,
 #include "llvm/IR/Value.def"
+//ConstantMemberPointerVal, // This is an instance of ConstantStruct
 
     // Markers:
 #define HANDLE_CONSTANT_MARKER(Marker, Constant) Marker = Constant##Val,

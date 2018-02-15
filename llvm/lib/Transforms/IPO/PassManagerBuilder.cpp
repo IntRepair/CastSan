@@ -139,6 +139,8 @@ PassManagerBuilder::PassManagerBuilder() {
     VerifyInput = false;
     VerifyOutput = false;
     MergeFunctions = false;
+    EmitIVTBLs = false;
+    EmitOVTBLs = false;
     PrepareForLTO = false;
     PGOInstrGen = RunPGOInstrGen;
     PGOInstrUse = RunPGOInstrUse;
@@ -734,9 +736,28 @@ void PassManagerBuilder::populateThinLTOPassManager(
   PerformThinLTO = false;
 }
 
+#include <iostream>
+
 void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
   if (LibraryInfo)
     PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
+  
+  //Paul: emit interleaved or ordered v tables
+  if (EmitIVTBLs || EmitOVTBLs) {
+    // Lets get the sd passes out of the way
+    // Remove unused vtables (pure virtual or unrereferenced) before interleaving
+    PM.add(createGlobalDCEPass()); 
+   
+    //Paul: these are the 4 four passes, the other 2 passes are down        
+    PM.add(llvm::createSDFixPass()); // P1
+    PM.add(llvm::createSDBuildCHAPass()); // P2
+    PM.add(llvm::createSDLayoutBuilderPass(EmitIVTBLs)); // P3
+    PM.add(llvm::createSDUpdateIndicesPass()); // P4
+  }
+
+  if (EmitIVTBLs) {
+	  PM.add(llvm::createCastSanInsertChecksPass()); //P6
+  }
 
   if (VerifyInput)
     PM.add(createVerifierPass());
@@ -746,6 +767,13 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
 
   if (OptLevel > 1)
     addLTOOptimizationPasses(PM);
+
+  if (EmitIVTBLs || EmitOVTBLs ) {
+    
+    //Paul: this pass adds the checks
+    PM.add(llvm::createSDSubstModulePass()); // P5
+  }
+
 
   // Create a function that performs CFI checks for cross-DSO calls with targets
   // in the current module.
@@ -758,6 +786,11 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
 
   if (OptLevel != 0)
     addLateLTOOptimizationPasses(PM);
+  
+  if (EmitIVTBLs || EmitOVTBLs) {
+     //Paul: this pass moves some bb 
+    PM.add(llvm::createSDMoveBasicBlocksPass()); //P7
+  }
 
   if (VerifyOutput)
     PM.add(createVerifierPass());

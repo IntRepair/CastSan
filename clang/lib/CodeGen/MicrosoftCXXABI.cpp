@@ -286,6 +286,7 @@ public:
 
   llvm::Value *getVirtualFunctionPointer(CodeGenFunction &CGF, GlobalDecl GD,
                                          Address This, llvm::Type *Ty,
+                                         const CXXRecordDecl *RD,
                                          SourceLocation Loc) override;
 
   llvm::Value *EmitVirtualDestructorCall(CodeGenFunction &CGF,
@@ -371,10 +372,15 @@ public:
   }
 
   llvm::Value *performThisAdjustment(CodeGenFunction &CGF, Address This,
-                                     const ThisAdjustment &TA) override;
+                                     const ThisAdjustment &TA,
+                                     //maybe use SourceLocation loc instead 
+                                     const CXXRecordDecl *RD) override;
 
   llvm::Value *performReturnAdjustment(CodeGenFunction &CGF, Address Ret,
-                                       const ReturnAdjustment &RA) override;
+                                       const ReturnAdjustment &RA,
+                                       //maybe use SourceLocation loc instead 
+                                       const CXXRecordDecl *RD) override;
+
 
   void EmitThreadLocalInitFuncs(
       CodeGenModule &CGM, ArrayRef<const VarDecl *> CXXThreadLocals,
@@ -1806,6 +1812,7 @@ llvm::Value *MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                         GlobalDecl GD,
                                                         Address This,
                                                         llvm::Type *Ty,
+                                                        const CXXRecordDecl *RD,
                                                         SourceLocation Loc) {
   GD = GD.getCanonicalDecl();
   CGBuilderTy &Builder = CGF.Builder;
@@ -1841,7 +1848,7 @@ llvm::Value *MicrosoftCXXABI::EmitVirtualDestructorCall(
       Dtor, StructorType::Deleting);
   llvm::Type *Ty = CGF.CGM.getTypes().GetFunctionType(*FInfo);
   llvm::Value *Callee = getVirtualFunctionPointer(
-      CGF, GD, This, Ty, CE ? CE->getLocStart() : SourceLocation());
+	  CGF, GD, This, Ty, NULL, CE ? CE->getLocStart() : SourceLocation());
 
   ASTContext &Context = getContext();
   llvm::Value *ImplicitParam = llvm::ConstantInt::get(
@@ -2042,7 +2049,10 @@ void MicrosoftCXXABI::emitVBTableDefinition(const VPtrInfo &VBT,
 
 llvm::Value *MicrosoftCXXABI::performThisAdjustment(CodeGenFunction &CGF,
                                                     Address This,
-                                                    const ThisAdjustment &TA) {
+                                                    const ThisAdjustment &TA,
+                                                    //maybe use SourceLocation loc
+                                                    const CXXRecordDecl *RD) {
+
   if (TA.isEmpty())
     return This.getPointer();
 
@@ -2094,7 +2104,10 @@ llvm::Value *MicrosoftCXXABI::performThisAdjustment(CodeGenFunction &CGF,
 
 llvm::Value *
 MicrosoftCXXABI::performReturnAdjustment(CodeGenFunction &CGF, Address Ret,
-                                         const ReturnAdjustment &RA) {
+                                         const ReturnAdjustment &RA,
+                                         //use source location here
+                                         const CXXRecordDecl *RD) {
+
   if (RA.isEmpty())
     return Ret.getPointer();
 

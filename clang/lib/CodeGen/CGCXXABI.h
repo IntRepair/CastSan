@@ -41,8 +41,9 @@ struct CatchTypeInfo;
 
 /// \brief Implements C++ ABI-specific code generation functions.
 class CGCXXABI {
-protected:
+public:
   CodeGenModule &CGM;
+protected:
   std::unique_ptr<MangleContext> MangleCtx;
 
   CGCXXABI(CodeGenModule &CGM)
@@ -391,6 +392,7 @@ public:
                                                  GlobalDecl GD,
                                                  Address This,
                                                  llvm::Type *Ty,
+                                                 const CXXRecordDecl *RD,
                                                  SourceLocation Loc) = 0;
 
   /// Emit the ABI-specific virtual destructor call.
@@ -413,11 +415,15 @@ public:
 
   virtual llvm::Value *performThisAdjustment(CodeGenFunction &CGF,
                                              Address This,
-                                             const ThisAdjustment &TA) = 0;
+                                             const ThisAdjustment &TA,
+                                             const CXXRecordDecl *RD) = 0;
+
 
   virtual llvm::Value *performReturnAdjustment(CodeGenFunction &CGF,
                                                Address Ret,
-                                               const ReturnAdjustment &RA) = 0;
+                                               const ReturnAdjustment &RA,
+                                               const CXXRecordDecl *RD) = 0;
+
 
   virtual void EmitReturnFromThunk(CodeGenFunction &CGF,
                                    RValue RV, QualType ResultType);
@@ -433,6 +439,11 @@ public:
 
   /// Gets the deleted virtual member call name.
   virtual StringRef GetDeletedVirtualCallName() = 0;
+
+  std::string GetClassMangledName(const CXXRecordDecl *RD);
+  std::string GetClassMangledConstrName(const CXXRecordDecl *RD,
+                                                const BaseSubobject &Base);
+
 
   /**************************** Array cookies ******************************/
 

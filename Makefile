@@ -1,5 +1,6 @@
 LLVM_DIR = ${CURDIR}/llvm
 BUILD_DIR = ${CURDIR}/build
+BINUTILS_DIR = ${CURDIR}/binutils
 
 hextype:
 	mkdir -p ${BUILD_DIR}
@@ -16,6 +17,7 @@ hextype:
 	  -DLLVM_INCLUDE_EXAMPLES=ON \
 	  -DBUILD_SHARED_LIBS=on \
 	  -DLLVM_TARGETS_TO_BUILD="X86" \
+      -DLLVM_BINUTILS_INCDIR=${BINUTILS_DIR}/include \
 	  -DCMAKE_C_FLAGS="-fstandalone-debug" \
 	  -DCMAKE_CXX_FLAGS="-fstandalone-debug" \
 	  ${LLVM_DIR})

@@ -1025,7 +1025,20 @@ private:
   /// The last regular (non-return) debug location (breakpoint) in the function.
   SourceLocation LastStopPoint;
 
+  /// list of defferred vptr check fail blocks to be emitted in the function epilogue
+  struct DeferredVTableFailBlock {
+    llvm::BasicBlock *bb;
+  };
+
+  typedef SmallVector<struct DeferredVTableFailBlock, 16> DeferredVTableFailBlockV;
+  DeferredVTableFailBlockV DeferredVTableFailBlocks;
+
+  void EmitDeferredVTableFailBlocks();
+
 public:
+
+  void addDeferredVTableFailBlock(llvm::BasicBlock *bb);
+
   /// A scope within which we are constructing the fields of an object which
   /// might use a CXXDefaultInitExpr. This stashes away a 'this' value to use
   /// if we need to evaluate a CXXDefaultInitExpr within the evaluation.
@@ -1924,6 +1937,7 @@ public:
   llvm::Value *EmitCXXTypeidExpr(const CXXTypeidExpr *E);
   llvm::Value *EmitDynamicCast(Address V, const CXXDynamicCastExpr *DCE);
   Address EmitCXXUuidofExpr(const CXXUuidofExpr *E);
+  llvm::Value* InsertCastInfo(std::string VBaseClassName, std::string PreciseClassName, llvm::Value * V);
 
   /// \brief Situations in which we might emit a check for the suitability of a
   ///        pointer or glvalue.
@@ -1961,6 +1975,12 @@ public:
   /// \brief Whether any type-checking sanitizers are enabled. If \c false,
   /// calls to EmitTypeCheck can be skipped.
   bool sanitizePerformTypeCheck() const;
+
+  /// \brief Emit a check that the VTable Pointer of \p V is in the interleaved
+  /// VTable-Range of \p DerivedClassDecl in the first VTable of \p BaseClassDecl.
+  /// This relies on interleaved VTables by SafeDispatch.
+  void EmitVTableCastCheck(Address V, const CXXRecordDecl *DerivedClassDecl,
+                           const CXXRecordDecl *BaseClassDecl);
 
   /// \brief Emit a check that \p V is the address of storage of the
   /// appropriate size and alignment for an object of type \p Type.

@@ -157,7 +157,8 @@ LexicalScopes::getOrCreateRegularScope(const DILocalScope *Scope) {
                                                     false)).first;
 
   if (!Parent) {
-    assert(cast<DISubprogram>(Scope)->describes(MF->getFunction()));
+//    assert(cast<DISubprogram>(Scope)->describes(MF->getFunction()));
+//    assert(cast<MDSubprogram>(Scope)->describes(MF->getFunction()));    
     assert(!CurrentFnLexicalScope);
     CurrentFnLexicalScope = &I->second;
   }

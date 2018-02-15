@@ -1270,6 +1270,37 @@ static void WriteConstantInternal(raw_ostream &Out, const Constant *CV,
     return;
   }
 
+if (const ConstantMemberPointer *CMP = dyn_cast<ConstantMemberPointer>(CV)) {
+    if (CMP->getType()->isPacked())
+      Out << '<';
+    Out << '{';
+    unsigned N = CMP->getNumOperands();
+    if (N) {
+      Out << ' ';
+      TypePrinter.print(CMP->getOperand(0)->getType(), Out);
+      Out << ' ';
+
+      WriteAsOperandInternal(Out, CMP->getOperand(0), &TypePrinter, Machine,
+                             Context);
+
+      for (unsigned i = 1; i < N; i++) {
+        Out << ", ";
+        TypePrinter.print(CMP->getOperand(i)->getType(), Out);
+        Out << ' ';
+
+        WriteAsOperandInternal(Out, CMP->getOperand(i), &TypePrinter, Machine,
+                               Context);
+      }
+      Out << ' ';
+    }
+
+    Out << '}';
+    if (CMP->getType()->isPacked())
+      Out << '>';
+    return;
+  }
+
+
   if (isa<ConstantVector>(CV) || isa<ConstantDataVector>(CV)) {
     Type *ETy = CV->getType()->getVectorElementType();
     Out << '<';

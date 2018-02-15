@@ -17,6 +17,8 @@
 #include "llvm/IR/Module.h"
 #include <algorithm>
 #include <cstdarg>
+#include <stack>
+
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
@@ -436,9 +438,44 @@ void StructType::setName(StringRef Name) {
 StructType *StructType::create(LLVMContext &Context, StringRef Name) {
   StructType *ST = new (Context.pImpl->TypeAllocator) StructType(Context);
   if (!Name.empty())
+  {
+   if (mangledNames.count(Name) > 0)
+    ST->clangMangledName = Name;
     ST->setName(Name);
+  }else
+	  unnamedStructs.push_back(ST);
   return ST;
 }
+
+std::vector<StructType*> StructType::unnamedStructs;
+std::map<StringRef, StringRef> StructType::mangledNames;
+
+void StructType::setMangledName(StringRef name)
+{
+	mangledNames[this->getName()] = name;
+	this->clangMangledName = name;
+	std::stack<int> named;
+	int i = 0;
+	for (auto it : unnamedStructs)
+	{
+		if (it->hasName())
+		{
+			if (it->getName().compare(this->getName()))
+			{
+				it->clangMangledName = name;
+				named.push(i);				
+			}
+		}
+		i++;
+	}
+	while (named.size() > 0)
+	{
+		unnamedStructs.erase(unnamedStructs.begin() + i);
+		named.pop();
+	}
+}
+
+
 
 StructType *StructType::get(LLVMContext &Context, bool isPacked) {
   return get(Context, None, isPacked);

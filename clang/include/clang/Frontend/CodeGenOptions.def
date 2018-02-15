@@ -181,6 +181,13 @@ CODEGENOPT(DebugExplicitImport, 1, 0)  ///< Whether or not debug info should
 
 CODEGENOPT(EmitLLVMUseLists, 1, 0) ///< Control whether to serialize use-lists.
 
+/// Generate checks before dynamic dispatch
+CODEGENOPT(EmitVTBLChecks    , 1, 0)
+CODEGENOPT(EmitIVTBL, 1, 0) ///< Control whether we emit interleaved vtables
+
+/// Generate checks before casting
+CODEGENOPT(EmitCastChecks, 1, 0)
+
 CODEGENOPT(WholeProgramVTables, 1, 0) ///< Whether to apply whole-program
                                       ///  vtable optimization.
 

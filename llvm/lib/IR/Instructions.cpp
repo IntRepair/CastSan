@@ -24,6 +24,9 @@
 #include "llvm/IR/Operator.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/IR/Constants.h"
+#include <vector>
+
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
@@ -3977,3 +3980,11 @@ UnreachableInst *UnreachableInst::cloneImpl() const {
   LLVMContext &Context = getContext();
   return new UnreachableInst(Context);
 }
+
+void SelectInst::init(Value *C, Value *S1, Value *S2) {
+  assert(!areInvalidOperands(C, S1, S2) && "Invalid operands for select");
+  Op<0>() = C;
+  Op<1>() = S1;
+  Op<2>() = S2;
+}
+
