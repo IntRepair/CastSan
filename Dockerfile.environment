@@ -1,7 +1,7 @@
 FROM debian:9-slim
 
 RUN apt update && apt upgrade -y
-RUN apt install -y build-essential git bison flex wget python cmake libunwind-dev texinfo git clang llvm
+RUN apt install -y build-essential git bison flex wget python cmake libunwind-dev texinfo git clang llvm gdb vim
 
 RUN useradd -m -U llvm
 
