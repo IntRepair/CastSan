@@ -98,6 +98,8 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
  if (isa<CXXRecordDecl>(RD))
   {
 	  auto name = CGM.getCXXABI().GetClassMangledName(static_cast<const CXXRecordDecl*>(RD));
+
+	  std::cerr << name << std::endl;
 	  Ty->setMangledName(name);
   }
 

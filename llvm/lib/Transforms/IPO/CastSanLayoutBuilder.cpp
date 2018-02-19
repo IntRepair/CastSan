@@ -40,7 +40,7 @@ using namespace llvm;
 #define WORD_WIDTH 8
 #define NEW_VTABLE_NAME(vtbl) ("_SD" + vtbl)
 #define NEW_VTHUNK_NAME(fun,parent) ("_SVT" + parent + fun->getName().str())
-#define GEP_OPCODE      29
+#define GEP_OPCODE      32
 
 char SDLayoutBuilder::ID = 0;
 
@@ -1058,6 +1058,7 @@ void SDLayoutBuilder::createNewVTable(Module& M, SDLayoutBuilder::vtbl_name_t& v
 
       //check that user const. expression is == GEP_OPCODE == 29
       //GEP = get element pointer 
+      std::cerr << "Found OPCode: " << userCE->getOpcode(); 
       assert(userCE && userCE->getOpcode() == GEP_OPCODE);
 
       // get the address pointer from the instruction

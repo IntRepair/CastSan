@@ -468,8 +468,11 @@ void StructType::setMangledName(StringRef name)
 		}
 		i++;
 	}
+
 	while (named.size() > 0)
 	{
+		i = named.top();
+		assert (unnamedStructs.size() > i);
 		unnamedStructs.erase(unnamedStructs.begin() + i);
 		named.pop();
 	}

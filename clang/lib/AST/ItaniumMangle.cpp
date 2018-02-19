@@ -3135,11 +3135,22 @@ recurse:
 
   case Expr::UnresolvedMemberExprClass: {
     const UnresolvedMemberExpr *ME = cast<UnresolvedMemberExpr>(E);
-     mangleMemberExpr(ME->isImplicitAccess() ? nullptr : ME->getBase(),
+    /*  mangleMemberExpr(ME->isImplicitAccess() ? nullptr : ME->getBase(),
                      ME->isArrow(), ME->getQualifier(), nullptr,
                      ME->getMemberName(), Arity);
     if (ME->hasExplicitTemplateArgs())
-      mangleTemplateArgs(ME->getTemplateArgs(), ME->getNumTemplateArgs());
+    mangleTemplateArgs(ME->getTemplateArgs(), ME->getNumTemplateArgs());*/
+    if(!ME->isImplicitAccess()) {
+      mangleMemberExpr(ME->getBase(), ME->isArrow(),
+                       ME->getQualifier(), nullptr, ME->getMemberName(),
+                       Arity);
+      if (ME->hasExplicitTemplateArgs())
+        mangleTemplateArgs(ME->getTemplateArgs(), ME->getNumTemplateArgs());
+    } else {
+      mangleMemberExpr(nullptr, ME->isArrow(),
+                       ME->getQualifier(), nullptr, ME->getMemberName(),
+                       Arity);
+    }
     break;
   }
 
