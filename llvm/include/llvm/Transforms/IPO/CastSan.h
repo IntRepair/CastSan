@@ -4,6 +4,7 @@
 #include "CastSanMD.h"
 
 //bit cast opcode 
-#define BITCAST_OPCODE  44
+// UPDATE opcode for new llvm version
+#define BITCAST_OPCODE 47
 #endif
 

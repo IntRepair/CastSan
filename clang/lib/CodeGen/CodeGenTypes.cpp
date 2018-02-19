@@ -98,8 +98,6 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
  if (isa<CXXRecordDecl>(RD))
   {
 	  auto name = CGM.getCXXABI().GetClassMangledName(static_cast<const CXXRecordDecl*>(RD));
-
-	  std::cerr << name << std::endl;
 	  Ty->setMangledName(name);
   }
 
@@ -707,7 +705,6 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
     {
 	    const CXXRecordDecl * cxxrd = static_cast<const CXXRecordDecl *>(RD);
 	    auto name = CGM.getCXXABI().GetClassMangledName(cxxrd);
-	    std::cerr << "Inserting Mangled name: " << name << std::endl;
 	    Entry->clangMangledName = CGM.getCXXABI().GetClassMangledName(cxxrd);
     }
   }
@@ -716,10 +713,9 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
 	  if (Entry->clangMangledName.compare("") == 0)
 	  {
 		  const CXXRecordDecl * cxxrd = static_cast<const CXXRecordDecl *>(RD);
+		  assert (cxxrd && "cxx rd is null");
 		  Entry->clangMangledName = CGM.getCXXABI().GetClassMangledName(cxxrd);
 	  }
-	  std::cerr << "Found Entry: " << Entry->getName().data() << " with mangled Name: " << Entry->clangMangledName.data() << std::endl;
-
   }
   llvm::StructType *Ty = Entry;
 

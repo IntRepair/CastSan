@@ -268,7 +268,7 @@ Function* SDLayoutBuilder::getVthunkFunction(Constant* vtblElement) {
   // if this a constant bitcast expression, this might be a vthunk
   // cast and assign the vtbl element as a constant expresion 
   // check if it is a bit cast expresion, BITCAST_OPCODE == 28 
-  if ((bcExpr = dyn_cast<ConstantExpr>(vtblElement)) && bcExpr->getOpcode() == BITCAST_OPCODE) {
+  if ((bcExpr = dyn_cast<ConstantExpr>(vtblElement)) && bcExpr->getOpcode() != 46 && std::cerr << " ---- DEBUG OPCODE: " << bcExpr->getOpcode() << std::endl && bcExpr->getOpcode() == BITCAST_OPCODE) {
    
    //get first operant 
     Constant* operand = bcExpr->getOperand(0);
@@ -325,7 +325,10 @@ void SDLayoutBuilder::createThunkFunctions(Module& M, const vtbl_name_t& rootNam
 
       //skyp if thunkF is null 
       if (! thunkF)
+      {
+	      std::cerr << " ------------- DEBUG: skip " << std::endl;
         continue;
+      }
 
       // find the index of the sub-vtable inside the whole
       unsigned order = cha->getVTableOrder(vtbl, vtblInd);
@@ -337,6 +340,8 @@ void SDLayoutBuilder::createThunkFunctions(Module& M, const vtbl_name_t& rootNam
       //NEW_VTHUNK_NAME(fun,parent) ("_SVT" + parent + fun->getName().str())
       //attack to the name of the thunk function the name of the parent class 
       std::string newThunkName(NEW_VTHUNK_NAME(thunkF, parentClass));
+
+      std::cerr << " --------- DEBUG: new name: " << newThunkName << std::endl;
       
       //if allready exists than skip 
       if (M.getFunction(newThunkName)) {
@@ -1060,7 +1065,6 @@ void SDLayoutBuilder::createNewVTable(Module& M, SDLayoutBuilder::vtbl_name_t& v
 
       //check that user const. expression is == GEP_OPCODE == 29
       //GEP = get element pointer 
-      std::cerr << "Found OPCode: " << userCE->getOpcode(); 
       assert(userCE && userCE->getOpcode() == GEP_OPCODE);
 
       // get the address pointer from the instruction

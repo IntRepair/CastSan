@@ -2046,7 +2046,7 @@ llvm::Value *ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                       GlobalDecl GD,
                                                       Address This,
                                                       llvm::Type *Ty,
-                                                      const CXXRecordDecl *RD,
+                                                      const CXXRecordDecl *preciseType,
                                                       SourceLocation Loc) {
   GD = GD.getCanonicalDecl();
   Ty = Ty->getPointerTo()->getPointerTo();
@@ -2057,11 +2057,10 @@ llvm::Value *ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
   const CXXMethodDecl *MD = cast<CXXMethodDecl>(GD.getDecl());
 
   // put mangled vtable name into a string
-  //const CXXRecordDecl* RD = MD->getParent();
-  std::string Name = this->GetClassMangledName(RD);
+  const CXXRecordDecl* RD = MD->getParent();
 
   if (CGM.getCodeGenOpts().EmitVTBLChecks && sd_isVtableDecl(nullptr, &CGF.CGM, RD)) {
-    VTable = sd_getCheckedVTable2(CGM, CGF, MD, VTable, RD);
+    VTable = sd_getCheckedVTable2(CGM, CGF, MD, VTable, preciseType);
   }
 
   CGF.EmitBitSetCodeForVCall(MethodDecl->getParent(), VTable, Loc);
@@ -2071,6 +2070,7 @@ llvm::Value *ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
   llvm::Value* VFuncPtr = NULL;
 
   if (CGM.getCodeGenOpts().EmitIVTBL && sd_isVtableDecl(nullptr, &CGF.CGM, RD) && RD->isDynamicClass()) {
+    std::string Name = this->GetClassMangledName(RD);
     llvm::GlobalVariable* VTableGV = sd_needGlobalVar(this,RD) ?
           getAddrOfVTable(RD, CharUnits()) : NULL;
 
