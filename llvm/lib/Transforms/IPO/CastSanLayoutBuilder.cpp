@@ -40,6 +40,8 @@ using namespace llvm;
 #define WORD_WIDTH 8
 #define NEW_VTABLE_NAME(vtbl) ("_SD" + vtbl)
 #define NEW_VTHUNK_NAME(fun,parent) ("_SVT" + parent + fun->getName().str())
+
+// UPDATE for llvm version!
 #define GEP_OPCODE      32
 
 char SDLayoutBuilder::ID = 0;
