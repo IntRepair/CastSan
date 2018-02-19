@@ -13,7 +13,7 @@ run_benchmarks() {
 
 
   # TODO: Add  'dyn_link1' 
-  local -a benchmarks2=('abi_ex' 
+  local -a benchmarks=('abi_ex' 
                        'multiple_secondary' 
                        'my_ex1' 
                        'only_mult2' 
@@ -50,7 +50,7 @@ run_benchmarks() {
                        'virtual_with_virtual_primary_base' 
                        'shrink_wrap_paper_example')
 
-  local -a benchmarks=('shrink_wrap_paper_example')                 
+  local -a benchmarks2=('shrink_wrap_paper_example')                 
                        #'shrink_wrap_paper_example_overwrite')
 
   local -a neg_benchs=('bad_cast' 

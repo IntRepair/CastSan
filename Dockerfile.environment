@@ -13,5 +13,8 @@ RUN git clone --single-branch -b binutils-2_28-branch https://github.com/bminor/
 WORKDIR /home/llvm/source/binutils/build
 RUN ../configure --enable-gold --enable-plugins --disable-werror && make -j`nproc`
 
+WORKDIR /home/llvm/source/binutils/build/gold
+RUN ln -s ld-new ld
+
 #WORKDIR /home/llvm/source
 #RUN ./build.sh

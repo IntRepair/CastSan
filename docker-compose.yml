@@ -18,7 +18,18 @@ services:
          - .:/code
         working_dir: /code/benchmarks
         user: llvm
-        command: ./run_all_benchmarks.sh good_cast
+        command: ./run_all_benchmarks.sh
+    bash_llvm:
+        build:
+            context: .
+            dockerfile: Dockerfile.environment
+        volumes:
+         - .:/code
+        working_dir: /code/benchmarks
+        user: llvm
+        stdin_open: true
+        tty: true
+        command: /bin/bash
     bash:
         build:
             context: .

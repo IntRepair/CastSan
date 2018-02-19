@@ -104,6 +104,8 @@ def is_on_zoidberg_dimo():
 def is_on_matt_desktop():
   return get_hostname() == "matt-desktop" and get_username() == "matt"
 
+def is_on_docker():
+  return get_username() == "llvm"
 
 # ----------------------------------------------------------------------
 
@@ -187,6 +189,14 @@ def read_config():
       "LLVM_BUILD_DIR"     : os.environ["HOME"] + "/Build/llvm",
       "BINUTILS_BUILD_DIR" : os.environ["HOME"] + "/Build/binutils",
       "SD_DIR"             : os.environ["HOME"] + "/Repos/llvm_pass/scripts",
+      "MY_GCC_VER"         : "6.3.0"
+    }
+  elif is_on_docker(): # basti notebook
+    clang_config = {
+      "LLVM_DIR"           : "/code/llvm",
+      "LLVM_BUILD_DIR"     : "/code/build",
+      "BINUTILS_BUILD_DIR" : "/code/binutils/build",
+      "SD_DIR"             : "/code/scripts",
       "MY_GCC_VER"         : "6.3.0"
     }
   elif is_on_zoidberg_dimo(): # zoidberg
