@@ -178,6 +178,16 @@ static void addBoundsCheckingPass(const PassManagerBuilder &Builder,
   PM.add(createBoundsCheckingPass());
 }
 
+static void addHexTypePass(const PassManagerBuilder &Builder,
+                                    PassManagerBase &PM) {
+  PM.add(createHexTypePass());
+}
+
+static void addHexTypeTreePass(const PassManagerBuilder &Builder,
+                                    PassManagerBase &PM) {
+  PM.add(createHexTypeTreePass());
+}
+
 static void addSanitizerCoveragePass(const PassManagerBuilder &Builder,
                                      legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
@@ -402,6 +412,17 @@ void EmitAssemblyHelper::CreatePasses(FunctionInfoIndex *FunctionIndex) {
                            addDataFlowSanitizerPass);
     PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
                            addDataFlowSanitizerPass);
+  }
+
+  if (LangOpts.Sanitize.has(SanitizerKind::HexType)) {
+	  PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
+			  addHexTypeTreePass);
+	  PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+			  addHexTypeTreePass);
+	  PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+			  addHexTypePass);
+	  PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+			  addHexTypePass);
   }
 
   // Set up the per-function pass manager.

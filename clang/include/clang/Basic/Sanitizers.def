@@ -50,6 +50,9 @@ SANITIZER("memory", Memory)
 // ThreadSanitizer
 SANITIZER("thread", Thread)
 
+// HexType
+SANITIZER("hextype", HexType)
+
 // LeakSanitizer
 SANITIZER("leak", Leak)
 
