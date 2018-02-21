@@ -37,10 +37,13 @@
 using namespace clang;
 using namespace CodeGen;
 
+//Paul: initialization option for handling of reinterpret casts.
 llvm::cl::opt<bool> ClHandleReinterpretCast(
   "handle-reinterpret-cast", llvm::cl::desc("handle reinterpret cast"),
   llvm::cl::Hidden, llvm::cl::init(false));
 
+//Paul: initialization option for emiting clang type info.
+//this used for creating the hash pairs.
 llvm::cl::opt<bool> ClEmitClangTypeInfo(
   "create-clang-typeinfo", llvm::cl::desc("create clang level type information"),
   llvm::cl::Hidden, llvm::cl::init(false));
@@ -102,7 +105,8 @@ CodeGenFunction::~CodeGenFunction() {
   if (getLangOpts().OpenMP) {
     CGM.getOpenMPRuntime().functionFinished(*this);
   }
-
+  
+  //Paul: optionally put HexType output into a txt file.
   if (ClEmitClangTypeInfo) {
     char fileName[MAXLEN];
     char tmp[MAXLEN];

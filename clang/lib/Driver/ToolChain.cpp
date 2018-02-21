@@ -684,6 +684,7 @@ SanitizerMask ToolChain::getSupportedSanitizers() const {
   if (getTriple().getArch() == llvm::Triple::x86 ||
       getTriple().getArch() == llvm::Triple::x86_64)
     Res |= CFIICall;
+  //Paul: hextype supports x86 and x86_64 bit architectures.
   if (getTriple().getArch() == llvm::Triple::x86 ||
       getTriple().getArch() == llvm::Triple::x86_64)
     Res |= HexType;

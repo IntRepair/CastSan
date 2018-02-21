@@ -2512,6 +2512,9 @@ static void emitCheckHandlerCall(CodeGenFunction &CGF,
   }
 }
 
+/**
+Paul: generic function for emiting a check.
+See EmitNounwindRuntimeCall*/
 void CodeGenFunction::HexEmitCheck(StringRef FunName,
                                    ArrayRef<llvm::Value *> DynamicArgs,
                                    llvm::Value *DstTyHashValue) {
@@ -2656,6 +2659,8 @@ void CodeGenFunction::EmitCheck(
   EmitBlock(Cont);
 }
 
+/**
+Paul: generic function for emiting an object tracing call.*/
 void CodeGenFunction::HexEmitObjTraceInst(
   StringRef InstName, ArrayRef<llvm::Value *> DynamicArgs) {
   SmallVector<llvm::Value *, 4> Args;
@@ -3754,6 +3759,9 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
     llvm::HexTypeCommonUtil HexTypeCommonUtilSet;
 
     // Insert HexType's type casting verification instrumentation.
+    /**
+    Paul: emit cast for casts with nonvirtual offset and for virtual offset.
+    Here we call either EmitHexTypeCheckForCast or EmitHexTypeCheckForchangingCast*/
     if (SanOpts.has(SanitizerKind::HexType)) {
       if (llvm::ClCreateCastRelatedTypeList)
         HexTypeCommonUtilSet.updateCastingReleatedTypeIntoFile(

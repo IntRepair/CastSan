@@ -7,9 +7,13 @@
 //
 //===-------------------------------------------------------------------===//
 
+//Paul: one of the main files of hextype, all runtime functionality
+//is here contained.
 #include "hextype.h"
 #include <string.h>
 
+//Paul: find an object into the object tyoe map by providing the source address 
+//of the object.
 __attribute__((always_inline))
   inline ObjTypeMapEntry *findObjInfo(uptr* SrcAddr) {
     uint32_t MapIndex = getHash((uptr)SrcAddr);
@@ -23,6 +27,7 @@ __attribute__((always_inline))
     if (ObjTypeMap[MapIndex].HexTree != nullptr &&
         ObjTypeMap[MapIndex].HexTree->root != nullptr) {
       ObjTypeMapEntry *FindValue =
+        //search in the rb tree for the object
         (ObjTypeMapEntry *)rbtree_lookup(ObjTypeMap[MapIndex].HexTree, SrcAddr);
 #ifdef HEX_LOG
       if (FindValue != nullptr)
@@ -105,6 +110,8 @@ __attribute__((always_inline))
 #endif
       VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
       VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
+      //Paul: allways when we have SrcTypeHashValue == DstTypeHashValue
+      //then VerifyResultCache[CacheIndex].VerifyResult = SAFECASTSAME
       VerifyResultCache[CacheIndex].VerifyResult = SAFECASTSAME;
       return DstAddr;
     }
@@ -114,6 +121,8 @@ __attribute__((always_inline))
 #ifdef HEX_LOG
       IncVal(numCastHit, 1);
 #endif
+      //Paul: if it is not a BADCAST then it is one of the other three posibilities
+      //upcast, cast same or info is missing.
       if (VerifyResultCache[CacheIndex].VerifyResult != BADCAST) {
 #ifdef HEX_LOG
         char VerifyResult = VerifyResultCache[CacheIndex].VerifyResult;
@@ -172,7 +181,8 @@ __attribute__((always_inline))
 #endif
         return nullptr;
       }
-
+      
+      //Paul: perform the search in the phantom hash set
       std::unordered_map<uint64_t, PhantomHashSet*>::iterator it;
       it = ObjPhantomInfo->find(DstTypeHashValue);
       if (it != ObjPhantomInfo->end()) {
@@ -188,6 +198,7 @@ __attribute__((always_inline))
             if (RuleHash < PhantomHash)
               start = middle + 1;
             else if(RuleHash == PhantomHash) {
+              //Paul: this is a safe upcast
               VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
               VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
               VerifyResultCache[CacheIndex].VerifyResult = SAFECASTUPCAST;
@@ -202,7 +213,8 @@ __attribute__((always_inline))
           }
         }
       }
-
+      
+      //Paul: we have a bad cast here
       VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
       VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
       VerifyResultCache[CacheIndex].VerifyResult = BADCAST;
@@ -218,7 +230,10 @@ __attribute__((always_inline))
 #endif
     return nullptr;
   }
+//Paul the sanitizer functions are listed, there are all called
+//by previously added code instrumentation.
 
+//Paul: verify cast inline function version.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_inline(const uint64_t SrcTypeHashValue,
                                          const uint64_t DstTypeHashValue,
@@ -230,7 +245,9 @@ void __type_casting_verification_inline(const uint64_t SrcTypeHashValue,
   IncVal(numLookHit, 1);
   IncVal(numCastMiss, 1);
 #endif
-
+  
+  //Paul: we always haave a safe cast same if src type hash equals destination 
+  //type hash
   if (SrcTypeHashValue == DstTypeHashValue) {
 #ifdef HEX_LOG
     IncVal(numCastSame, 1);
@@ -307,7 +324,9 @@ void __type_casting_verification_inline(const uint64_t SrcTypeHashValue,
       }
     }
   }
-
+  
+  //Paul: this block stores the bad cast, the other cases above are for
+  //upcasts, fail info., or same cast same
   VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
   VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
   VerifyResultCache[CacheIndex].VerifyResult = BADCAST;
@@ -321,6 +340,7 @@ void __type_casting_verification_inline(const uint64_t SrcTypeHashValue,
   return;
 }
 
+//Paul: print the cache results.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_print_cache_result(const uint64_t index) {
 #ifdef PRINT_BAD_CASTING

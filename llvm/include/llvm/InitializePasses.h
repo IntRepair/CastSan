@@ -325,12 +325,12 @@ void initializeFunctionImportPassPass(PassRegistry &);
 void initializeLoopVersioningPassPass(PassRegistry &);
 void initializeWholeProgramDevirtPass(PassRegistry &);
 
-//the next two passes are from HexType
+//Paul: the next two passes are from HexType
 void initializeHexTypePass(PassRegistry&);
 void initializeHexTypeTreePass(PassRegistry&);
 
 /*Paul:
-these are the 6 passes used by safe dispatch*/
+these are the 6 passes used by cast san*/
 // safedispatch additions, this are the SD passes
 
 //this pass is used to make virtual constructor fixes in the program

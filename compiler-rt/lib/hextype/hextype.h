@@ -25,5 +25,7 @@ inline uint32_t getHash(uptr a) {
 typedef std::set<uint64_t> PhantomHashSet;
 static std::unordered_map<uint64_t, PhantomHashSet*> *ObjPhantomInfo;
 
+//Paul: two main data structures used in the runtime by hextype
+//to store object relations and verify the result cache.
 __attribute__ ((visibility ("default"))) ObjTypeMapEntry *ObjTypeMap;
 __attribute__ ((visibility ("default"))) VerifyResultEntry *VerifyResultCache;

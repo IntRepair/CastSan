@@ -1325,8 +1325,13 @@ namespace {
   };
 }
 
-void CodeGenFunction::insertTypeRelationInfo(uint64_t TargetHashValue, uint64_t ParentHashValue,
-                                             std::map<uint64_t, HashSet*> &TargetStorage) {
+/**
+Paul: store in the TargetStorage a pair of a hash value: 
+TargetHashValue and TargetSet*/
+void CodeGenFunction::insertTypeRelationInfo(
+uint64_t TargetHashValue, 
+uint64_t ParentHashValue,                        
+std::map<uint64_t, HashSet*> &TargetStorage) {
   HashSet *TargetSet;
   bool isExist = true;
   auto it = TargetStorage.find(TargetHashValue);
@@ -1343,6 +1348,9 @@ void CodeGenFunction::insertTypeRelationInfo(uint64_t TargetHashValue, uint64_t 
     TargetStorage.insert(make_pair(TargetHashValue, TargetSet));
 }
 
+/**
+Paul: this function calls the aboce function havely in order to
+fill the target set for each TargetHashValue*/
 void CodeGenFunction::getTypeRelationInfo(const CXXRecordDecl *TargetDecl,
                                   const CXXRecordDecl *ParentDecl)
                                   {
@@ -1367,6 +1375,7 @@ void CodeGenFunction::getTypeRelationInfo(const CXXRecordDecl *TargetDecl,
       insertTypeRelationInfo(TargetHashValue, ParentHashValue, TypePhantomInfo);
       insertTypeRelationInfo(ParentHashValue, TargetHashValue, TypePhantomInfo);
     }
+    //Paul: TypeParentInfo is not declared!
     insertTypeRelationInfo(TargetHashValue, ParentHashValue, TypeParentInfo);
   }
 
@@ -1386,6 +1395,10 @@ void CodeGenFunction::getTypeRelationInfo(const CXXRecordDecl *TargetDecl,
   }
 }
 
+/**
+Paul: Used to create a object tracing function and to get the 
+relation infomation: used to create the the hash pair. See two above
+functions.*/
 void CodeGenFunction::getTypeElement(const CXXRecordDecl *ClassDecl,
                                      llvm::Value *ValueAddr,
                                      uint64_t offsetInt,
@@ -1616,7 +1629,9 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
 
     resultPtr = PHI;
   }
-
+  
+  /**
+   Paul: add object tracing instrumentation for the the new operator*/
   if(ClHandlePlacementNew && E->getNumPlacementArgs() >= 1) {
     auto *ClassTy = allocType->getAs<RecordType>();
     if (ClassTy) {

@@ -2945,7 +2945,8 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     NonWholeStaticRuntimes.push_back("stats");
     RequiredSymbols.push_back("__sanitizer_stats_register");
   }
-
+  
+  //Paul: add hextype to the static runtimes.
   if (SanArgs.needsHexTypeRt())
     StaticRuntimes.push_back("hextype");
 }

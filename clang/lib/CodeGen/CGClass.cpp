@@ -2517,6 +2517,9 @@ void CodeGenFunction::EmitVTablePtrCheckForCall(const CXXRecordDecl *RD,
   EmitVTablePtrCheck(RD, VTable, TCK, Loc);
 }
 
+/**
+Paul: generates the hash value for each class name.
+*/
 llvm::Value *CodeGenFunction::getHashValueFromQualType(QualType &T) {
 
   llvm::HexTypeCommonUtil HexTypeUtil;
@@ -2537,6 +2540,11 @@ llvm::Value *CodeGenFunction::getHashValueFromQualType(QualType &T) {
   return nullptr;
 }
 
+/**
+Paul: cast check function, this function
+has a counterpart function in the compiler-rt.
+Types may change.
+*/
 void CodeGenFunction::EmitHexTypeCheckForchangingCast(QualType T,
                                                       llvm::Value *Base,
                                                       llvm::Value *Derived,
@@ -2550,6 +2558,11 @@ void CodeGenFunction::EmitHexTypeCheckForchangingCast(QualType T,
   }
 }
 
+/**
+Paul: cast check function, this function
+has a counterpart function in the compiler-rt.
+Types may not change.
+*/
 void CodeGenFunction::EmitHexTypeCheckForCast(QualType T,
                                               llvm::Value *Derived,
                                               bool MayBeNull,
@@ -2688,6 +2701,10 @@ void CodeGenFunction::EmitVTablePtrCheck(const CXXRecordDecl *RD,
 }
 
 // insert instrumentation to handle reinterpret_cast
+/**
+Paul: handling of reinterpret casts, getTypeElement
+adds object tracing info.
+*/
 void CodeGenFunction::EmitHexTypeReinterpretCast(QualType T,
                                                  llvm::Value *Derived,
                                                  bool MayBeNull,

@@ -47,6 +47,7 @@
 using namespace clang;
 using namespace CodeGen;
 
+//Paul: add options for dynamic casting
 llvm::cl::opt<bool> ClEnhanceDynamicCast(
   "enhance-dynamic-cast",
   llvm::cl::desc(
@@ -1388,6 +1389,7 @@ bool ItaniumCXXABI::shouldDynamicCastCallBeNullChecked(bool SrcIsPtr,
   return SrcIsPtr;
 }
 
+//Paul: creates a runtime function for dynamic cast verification
 static llvm::Constant *getItaniumHexTypeDynamicCastFn(CodeGenFunction &CGF) {
   llvm::Type *Int8PtrTy = CGF.Int8PtrTy;
   llvm::Type *Int64Ty = CGF.Int64Ty;
@@ -1434,7 +1436,8 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastCall(
   Value = CGF.EmitCastToVoidPtr(Value);
 
   llvm::Value *args[] = {Value, SrcRTTI, DestRTTI, OffsetHint};
-
+  
+  //Paul: create bad cast blocks
   if((ClEnhanceDynamicCast) && CGF.SanOpts.has(SanitizerKind::HexType)) {
     llvm::HexTypeCommonUtil HexTypeUtil;
     QualType T = DestTy->getPointeeType();

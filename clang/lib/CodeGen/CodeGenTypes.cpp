@@ -61,6 +61,7 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
       if (dyn_cast<CXXRecordDecl>(RD)) {
         TheCXXABI.getMangleContext().mangleCXXRTTI(Context.getTypeDeclType(RD),
                                                    OSR);
+        //Paul: label the types as blacklisted or trackedtype.
         if (getContext().getSanitizerBlacklist().isBlacklistedType(OSR.str()))
           OS << "blacklistedtype" << '.';
         else
@@ -87,6 +88,7 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
     else
       TDD->printName(OS);
   } else {
+    //Paul: else the type is anonymus.
     OS << RD->getKindName() << '.';
     OS << "anon";
   }

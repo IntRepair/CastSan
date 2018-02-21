@@ -8,6 +8,7 @@
 
 std::atomic<unsigned long> count_index[MAXINDEX];
 
+//Paul: increment value function
 void IncVal(int index, int count) {
   count_index[index].fetch_add(count);
 }
@@ -58,6 +59,7 @@ void printTypeConfusion(int ErrorType, uint64_t SrcHash, uint64_t DstHash) {
 #endif
 }
 
+//Paul: printing statistics all at one. into the total_result.txt file.
 static void PrintStatResult(void) {
   char tmp[MAXLEN];
   char fileName[MAXLEN] = "/total_result.txt";
@@ -216,10 +218,12 @@ static void PrintStatResult(void) {
   printInfotoFile(tmp, fileName);
 }
 
+//Paul: when hextype terminates it will print all the above statistics.
 static void HexTypeAtExit(void) {
   PrintStatResult();
 }
 
+//Paul: at exit print all statistics from above.
 void InstallAtExitHandler() {
   atexit(HexTypeAtExit);
 }

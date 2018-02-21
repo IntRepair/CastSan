@@ -1410,6 +1410,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
 
     // to handle reinterpret_cast
+    /**
+    Paul: add reinterpret cast check*/
     if(ClHandleReinterpretCast &&
        CGF.SanOpts.has(SanitizerKind::HexType)) {
       if(isa<CXXReinterpretCastExpr>(CE)) {
@@ -1466,6 +1468,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
                                     CE->getLocStart());
 
     // Insert HexType's type casting verification instrumentation.
+    /**
+    Paul: add instrumentation for not changinf cast and for changing cast,
+    non-polymorphic and polimorptic casts.*/
     if (CGF.SanOpts.has(SanitizerKind::HexType)) {
 
       if (llvm::ClCreateCastRelatedTypeList)

@@ -6,25 +6,39 @@
 #define NDEBUG
 typedef rbtree_node node;
 typedef enum rbtree_node_color color;
-
+//Paul: standard red black tree node handling functions
 static node grandparent(node n);
 static node sibling(node n);
 static node uncle(node n);
 static color node_color(node n);
 
+//Paul: adds a new node. Note the key parameter.
+//The key parameter is used to link a node with a
+//list of hash pairs. Check who calls the new_node function.
 static node new_node(void* key, void* value, color node_color,
                      node left, node right);
+
+//Paul: used to look-up a node by providing a key value.
 static node lookup_node(rbtree t, void* key);
 static void rotate_left(rbtree t, node n);
 static void rotate_right(rbtree t, node n);
 
+//Paul: the replace node function
 static void replace_node(rbtree t, node oldn, node newn);
+//Paul: thse insert functions are chained together in order to
+//check the insert conditions in a cascade fashion
 static void insert_case1(rbtree t, node n);
 static void insert_case2(rbtree t, node n);
 static void insert_case3(rbtree t, node n);
 static void insert_case4(rbtree t, node n);
 static void insert_case5(rbtree t, node n);
 static node maximum_node(node root);
+
+//Paul: only one of the delete function actually deletes a
+//node. Only one function contains a free() call. It is only
+//rbtree_delete() function which realy deletes the node, the rest, rotate or make
+//other operations but these functions are calling each
+//other in a chanin fashion.
 static void delete_case1(rbtree t, node n);
 static void delete_case2(rbtree t, node n);
 static void delete_case3(rbtree t, node n);
@@ -32,6 +46,7 @@ static void delete_case4(rbtree t, node n);
 static void delete_case5(rbtree t, node n);
 static void delete_case6(rbtree t, node n);
 
+//Paul: logging the info into a file
 void write_log(char *result, char *filename) {
   if (getenv("HEXTYPE_LOG_PATH") != nullptr) {
     char *home = getenv("HEXTYPE_LOG_PATH");
@@ -177,6 +192,7 @@ void replace_node(rbtree t, node oldn, node newn) {
   }
 }
 
+//Paul: inserts a new node, for this it uses the new_node() function
 void rbtree_insert(rbtree t, void* key, void* value) {
 
   node inserted_node = new_node(key, value, RED, NULL, NULL);
@@ -285,7 +301,8 @@ int rbtree_delete(rbtree t, void* key) {
   replace_node(t, n, child);
   if (n->parent == NULL && child != NULL) // root should be black
     child->color = BLACK;
-
+  
+  //Paul: deletes the node
   free(n);
 
   return 1;

@@ -175,8 +175,11 @@ public:
   /// we prefer to insert allocas.
   llvm::AssertingVH<llvm::Instruction> AllocaInsertPt;
 
+  //Paul: provide access to the util functions of HexType
   llvm::HexTypeCommonUtil HexTypeUtil;
   typedef std::set<uint64_t> HashSet;
+  //Paul: the two hash maps holding hash pairs for
+  //nomarl classes and the phantom classes.
   std::map<uint64_t, HashSet*> TypeParentInfo;
   std::map<uint64_t, HashSet*> TypePhantomInfo;
 
@@ -1921,9 +1924,13 @@ public:
 
   llvm::Value *EmitLifetimeStart(uint64_t Size, llvm::Value *Addr);
   void EmitLifetimeEnd(llvm::Value *Size, llvm::Value *Addr);
+  
+  //Paul: get the info needed to build the hash
   void getTypeElement(const CXXRecordDecl *,
                       llvm::Value *, uint64_t , char *);
   void getTypeRelationInfo(const CXXRecordDecl *, const CXXRecordDecl *);
+  //Paul: insert the generated info into the normal hash map or the 
+  //phantom hash map. 
   void insertTypeRelationInfo(uint64_t, uint64_t, std::map<uint64_t, HashSet*> &);
   llvm::Value *EmitCXXNewExpr(const CXXNewExpr *E);
   void EmitCXXDeleteExpr(const CXXDeleteExpr *E);
@@ -3079,19 +3086,20 @@ public:
   void EmitCheck(ArrayRef<std::pair<llvm::Value *, SanitizerMask>> Checked,
                  StringRef CheckName, ArrayRef<llvm::Constant *> StaticArgs,
                  ArrayRef<llvm::Value *> DynamicArgs);
-
+  
+  //Paul: create the check.
   void HexEmitCheck(StringRef FunName, ArrayRef<llvm::Value *> DynamicArgs,
                     llvm::Value *DstTyHashValue);
-
+  //Paul: static cast check
   void EmitHexTypeCheckForCast(QualType T, llvm::Value *Derived,
                                bool MayBeNull, CFITypeCheckKind TCK,
                                SourceLocation Loc);
-
+  //Paul: changing (polymorphic check)
   void EmitHexTypeCheckForchangingCast(QualType T, llvm::Value *Base,
                                        llvm::Value *Derived,
                                        bool MayBeNull, CFITypeCheckKind TCK,
                                        SourceLocation Loc);
-
+  //Paul: get the hash from qual type.
   llvm::Value *getHashValueFromQualType(QualType &T);
   void HexEmitObjTraceInst(StringRef , ArrayRef<llvm::Value *> );
 
@@ -3108,7 +3116,8 @@ public:
   /// \brief Emit a call to trap or debugtrap and attach function attribute
   /// "trap-func-name" if specified.
   llvm::CallInst *EmitTrapCall(llvm::Intrinsic::ID IntrID);
-
+  
+  //Paul: the reinterpret cast check.
   void EmitHexTypeReinterpretCast(QualType T, llvm::Value *Derived,
                                   bool MayBeNull, CFITypeCheckKind TCK,
                                   SourceLocation Loc);

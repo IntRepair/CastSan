@@ -439,6 +439,8 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
   if (Sanitize.needsUbsanRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "ubsan");
+  
+  //Paul: add hextype
   if (Sanitize.needsHexTypeRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "hextype");
   if (Sanitize.needsTsanRt())
