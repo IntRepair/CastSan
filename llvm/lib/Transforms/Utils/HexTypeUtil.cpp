@@ -27,6 +27,7 @@
 #define MAXLEN 1000
 
 namespace llvm {
+  //Paul: next lines are some options all set on false initially
   cl::opt<bool> ClCreateCastRelatedTypeList(
     "create-cast-releated-type-list",
     cl::desc("create casting related object list"),
@@ -91,7 +92,8 @@ namespace llvm {
     }
     return ~crc;
   }
-
+  
+  //Paul: string manipualtion
   void removeTargetStr(std::string& FullStr, std::string RemoveStr) {
     std::string::size_type i;
 
@@ -102,7 +104,8 @@ namespace llvm {
         FullStr.erase(i, RemoveStr.length());
     }
   }
-
+  
+  //Paul: string manipulation
   void removeTargetNum(std::string& TargetStr) {
     std::string::size_type i;
     if((i = TargetStr.find(".")) == std::string::npos)
@@ -124,7 +127,8 @@ namespace llvm {
     infoGlobal->setInitializer(infoArray);
     return infoGlobal;
   }
-
+  
+  //Paul: ?
   bool HexTypeLLVMUtil::isSafeStackAlloca(AllocaInst *AI) {
     // Go through all uses of this alloca and check whether all accesses to
     // the allocated object are statically known to be memory safe and, hence,
@@ -229,7 +233,9 @@ namespace llvm {
     // All uses of the alloca are safe, we can place it on the safe stack.
     return true;
   }
-
+  
+  //Paul: read from the file and strore the info in the direct parrents or
+  //direct parents phantom
   void HexTypeLLVMUtil::getTypeInfoFromClang() {
     if (getenv("HEXTYPE_LOG_PATH") != nullptr) {
       char path[MAXLEN];
@@ -255,7 +261,8 @@ namespace llvm {
       }
     }
   }
-
+  
+  //Paul: ?
   void HexTypeLLVMUtil::getDirectTypeInfo(Module &M) {
     std::vector<StructType*> Types = M.getIdentifiedStructTypes();
     for (StructType *ST : Types) {
@@ -285,7 +292,8 @@ namespace llvm {
 
     return true;
   }
-
+   
+  //Paul: ?
   void HexTypeLLVMUtil::extendPhantomSet(int TargetIndex, int CurrentIndex) {
     if (VisitCheck[CurrentIndex] == true)
       return;
@@ -301,7 +309,8 @@ namespace llvm {
                        ParentNode->DirectPhantomTypes[i].TypeIndex);
     return;
   }
-
+  
+  //Paul: ?
   void HexTypeLLVMUtil::emitRemoveInst(Module *SrcM, IRBuilder<> &BuilderAI,
                                    AllocaInst *TargetAlloca) {
     Value *TypeSize = NULL;
@@ -325,7 +334,8 @@ namespace llvm {
     insertRemove(SrcM, BuilderAI, "__remove_stack_oinfo", TargetAlloca,
                  Elements, TypeSize, DL.getTypeAllocSize(AllocaType), NULL);
   }
-
+   
+  //Paul: ?
   void HexTypeLLVMUtil::extendParentSet(int TargetIndex, int CurrentIndex) {
     if (VisitCheck[CurrentIndex] == true)
       return;
@@ -356,6 +366,7 @@ namespace llvm {
 
             if (DL.getTypeAllocSize(AllTypeInfo[i].StructTy) ==
                 DL.getTypeAllocSize(AllTypeInfo[t].StructTy)) {
+              //Paul: store the same info at index i and t
               AllTypeInfo[i].DirectPhantomTypes.push_back(
                 AllTypeInfo[t].DetailInfo);
               AllTypeInfo[t].DirectPhantomTypes.push_back(
@@ -371,7 +382,8 @@ namespace llvm {
       extendPhantomSet(i, i);
     }
   }
-
+  
+  //Paul: sorting a set
   void HexTypeLLVMUtil::sortSet(std::set<uint64_t> &TargetSet) {
     std::vector<uint64_t> tmpSort;
     for (std::set<uint64_t>::iterator it=TargetSet.begin();
@@ -383,7 +395,8 @@ namespace llvm {
     for(size_t i=0; i<tmpSort.size(); i++)
       TargetSet.insert(tmpSort[i]);
   }
-
+  
+  //Paul: sort parent set
   void HexTypeLLVMUtil::getSortedAllParentSet() {
     typeInfoArray.push_back(ConstantInt::get(Int64Ty,
                                              AllTypeNum));
@@ -398,6 +411,7 @@ namespace llvm {
       std::set<uint64_t> TmpSet;
       for (unsigned long j=0;j<AllTypeInfo[i].AllParents.size();j++)
         TmpSet.insert(AllTypeInfo[i].AllParents[j].TypeHashValue);
+      //Paul: see previous function 
       sortSet(TmpSet);
 
       typeInfoArray.push_back(
@@ -409,11 +423,12 @@ namespace llvm {
         typeInfoArray.push_back(ConstantInt::get(Int64Ty, *it));
         typeInfoArrayInt.push_back(*it);
       }
-
+      //Paul: clear temporary set
       TmpSet.clear();
     }
   }
-
+  
+  //Paul: sort phantom set
   void HexTypeLLVMUtil::getSortedAllPhantomSet() {
     int phantomTypeCnt = 0;
     for (uint32_t i=0;i<AllTypeNum;i++)
@@ -447,7 +462,8 @@ namespace llvm {
       TmpOnlyPhantomSet.clear();
     }
   }
-
+  
+  //Paul: set casting related set
   void HexTypeLLVMUtil::setCastingRelatedSet() {
     if (getenv("HEXTYPE_LOG_PATH") != nullptr) {
       char path[MAXLEN];
@@ -458,8 +474,10 @@ namespace llvm {
       if(op != nullptr) {
         char TypeName[MAXLEN];
         flockfile(op);
+        //Paul: read from the file
         while(fscanf(op, "%s", TypeName) == 1) {
           std::string upTypeName(TypeName);
+          //Paul: fill the casting related set from file
           CastingRelatedSet.insert(upTypeName);
         }
         fclose(op);
@@ -494,7 +512,8 @@ namespace llvm {
       }
     }
   }
-
+  
+  //Paul: build relation info, all parent sets and all phatom sets
   void HexTypeLLVMUtil::createObjRelationInfo(Module &M) {
     getDirectTypeInfo(M);
     if (AllTypeInfo.size() == 0)
@@ -503,7 +522,8 @@ namespace llvm {
     getSortedAllParentSet();
     getSortedAllPhantomSet();
   }
-
+  
+  //Paul: init some local types
   void HexTypeLLVMUtil::initType(Module &M) {
     LLVMContext& Ctx = M.getContext();
 
@@ -519,7 +539,8 @@ namespace llvm {
     Int8Ty = Type::getInt8Ty(Ctx);
     Int1Ty = Type::getInt1Ty(Ctx);
   }
-
+   
+  //Paul: print into a txt file
   void HexTypeCommonUtil::writeInfoToFile(char *Info, char *FilePath) {
     assert(Info && "Invalid information");
     assert(FilePath && "Invalid filepath");
@@ -536,7 +557,8 @@ namespace llvm {
       }
     }
   }
-
+  
+  //Paul: see above function
   void HexTypeCommonUtil::updateCastingReleatedTypeIntoFile(Type *SrcTy) {
     if(SrcTy->isPointerTy()) {
       llvm::PointerType *ptr = cast<llvm::PointerType>(SrcTy);
@@ -556,7 +578,8 @@ namespace llvm {
         }
     }
   }
-
+  
+  //Paul: used to remove some substrings from other strings
   void HexTypeCommonUtil::syncTypeName(std::string& TargetStr) {
     SmallVector<std::string, 12> RemoveStrs;
     RemoveStrs.push_back("::");
@@ -571,10 +594,12 @@ namespace llvm {
     RemoveStrs.push_back("'");
 
     for (unsigned long i=0; i<RemoveStrs.size(); i++)
+      //Paul: remove the above stings from all target string
       removeTargetStr(TargetStr, RemoveStrs[i]);
     removeTargetNum(TargetStr);
   }
-
+  
+  //Paul: get next instruction
   Instruction* HexTypeLLVMUtil::findNextInstruction(Instruction *CurInst) {
     BasicBlock::iterator it(CurInst);
     ++it;
@@ -583,7 +608,8 @@ namespace llvm {
 
     return &*it;
   }
-
+  
+  //Paul: ?
   void HexTypeLLVMUtil::getArrayOffsets(Type *AI, StructElementInfoTy &Elements,
                                     uint32_t Offset) {
     if (ArrayType *Array = dyn_cast<ArrayType>(AI)) {
@@ -599,7 +625,8 @@ namespace llvm {
       if (isInterestingStructType(STy))
         HexTypeLLVMUtil::getStructOffsets(STy, Elements, Offset);
   }
-
+  
+  //Paul: ?
   void HexTypeLLVMUtil::getStructOffsets(StructType *STy,
                                      StructElementInfoTy &Elements,
                                      uint32_t Offset) {
@@ -622,7 +649,8 @@ namespace llvm {
       HexTypeLLVMUtil::getArrayOffsets(STy->getElementType(i), Elements, tmp);
     }
   }
-
+  
+  //Paul: remove objects which are not used for casting
   void HexTypeLLVMUtil::removeNonCastingRelatedObj(StructElementInfoTy &Elements) {
     bool FindType = true;
     while (FindType && Elements.size() > 0) {
@@ -645,7 +673,8 @@ namespace llvm {
       }
     }
   }
-
+  
+  //Paul: ?
   GlobalVariable *HexTypeLLVMUtil::getVerifyResultCache(Module &M) {
     llvm::SmallString<32> ResultCacheTyName("struct.VerifyResultCache");
     llvm::Type *FieldTypes[] = {
@@ -700,7 +729,8 @@ namespace llvm {
 
     return GObjTypeMap;
   }
-
+  
+  //Paul: emit instructions for object tracing
   void HexTypeLLVMUtil::emitInstForObjTrace(Module *SrcM, IRBuilder<> &Builder,
                                             StructElementInfoTy &Elements,
                                             uint32_t EmitType,
@@ -793,6 +823,7 @@ namespace llvm {
       }
 
       switch (EmitType) {
+      //Paul: ?
       case CONOBJADD :
         {
           if (ClInlineOpt &&
@@ -827,10 +858,12 @@ namespace llvm {
             Builder.SetInsertPoint(ElseTerm);
             Function *initFunction =
               (Function*)SrcM->getOrInsertFunction(
+                //Paul: this function will call into the compiler-rt
                 "__update_direct_oinfo_inline", VoidTy,
                 IntptrTyN, Int64Ty, Int32Ty, IntptrTyN, Int64Ty, nullptr);
             Value *Param[5] = {ObjAddrT, TypeHashValue, OffsetV,
               RuleAddr, mapIndex64};
+            //Paul: insert the correspinding call
             Builder.CreateCall(initFunction, Param);
             Builder.SetInsertPoint(InsertPt);
           }
@@ -843,9 +876,11 @@ namespace llvm {
 
             Value *Param[4] = {ObjAddrT, TypeHashValue, OffsetV, RuleAddr};
             Function *initFunction =
+              //Paul: create the function, see above the two possible names
               (Function*)SrcM->getOrInsertFunction(TargetFn,
                                                    VoidTy, IntptrTyN, Int64Ty,
                                                    Int32Ty, IntptrTyN, nullptr);
+            //Paul: insert the correspinding call
             Builder.CreateCall(initFunction, Param);
           }
           if (ClMakeLogInfo) {
@@ -857,10 +892,12 @@ namespace llvm {
                 Int32Ty, Int64Ty, nullptr);
             Value *TmpOne = ConstantInt::get(Int64Ty, 1);
             Value *Param[2] = {AllocTypeV, TmpOne};
+            //Paul: calls obj update count in the compiler-rt
             Builder.CreateCall(ObjUpdateFunction, Param);
           }
           break;
         }
+      //Paul: ? virtual 
       case VLAOBJADD:
         {
           if (AllocType == REALLOC) {
@@ -870,6 +907,7 @@ namespace llvm {
                                      IntptrTyN);
             if (isFristEntry) {
               Function *initFunction =
+                //Paul: remove object info
                 (Function*)SrcM->getOrInsertFunction("__remove_oinfo",
                                                      VoidTy, IntptrTyN,
                                                      Int32Ty, Int64Ty,
@@ -879,6 +917,7 @@ namespace llvm {
             }
           }
           Function *initFunction =
+            //Paul: update object info
             (Function*)SrcM->getOrInsertFunction("__update_oinfo",
                                                  VoidTy, IntptrTyN, Int64Ty,
                                                  Int32Ty, Int32Ty,
@@ -886,6 +925,7 @@ namespace llvm {
           Value *ParamVLAADD[6] = {ObjAddrT, TypeHashValue, OffsetV,
             TypeSize, ArraySize, RuleAddr};
           Builder.CreateCall(initFunction, ParamVLAADD);
+          //Paul: object updaye count 
           if (ClMakeLogInfo) {
             Value *AllocTypeV =
               ConstantInt::get(Int32Ty, AllocType);
@@ -894,10 +934,12 @@ namespace llvm {
                 "__obj_update_count", VoidTy,
                 Int32Ty, Int64Ty, nullptr);
             Value *Param[2] = {AllocTypeV, ArraySize};
+            //Paul: add one of the calls from the three functions from above
             Builder.CreateCall(ObjUpdateFunction, Param);
           }
           break;
         }
+      //Paul: object delete
       case CONOBJDEL:
         {
          if (ClInlineOpt) {
@@ -918,6 +960,7 @@ namespace llvm {
             Builder.SetInsertPoint(ElseTerm);
             Function *initFunction =
               (Function*)SrcM->getOrInsertFunction(
+                //Paul: remove direct object info inline, see compiler-rt
                 "__remove_direct_oinfo_inline", VoidTy,
                 IntptrTyN, Int64Ty, nullptr);
             Value *Param[2] = {ObjAddrT, mapIndex64};
@@ -927,9 +970,11 @@ namespace llvm {
           else {
             Function *initFunction =
               (Function*)SrcM->getOrInsertFunction(
+                //Paul: remoce direct object info, see compiler-rt
                 "__remove_direct_oinfo", VoidTy,
                 IntptrTyN, nullptr);
             Value *ParamCONDEL[1] = {ObjAddrT};
+            //Paul: creat the corresponding call
             Builder.CreateCall(initFunction, ParamCONDEL);
           }
           if (ClMakeLogInfo) {
@@ -937,10 +982,12 @@ namespace llvm {
               ConstantInt::get(Int32Ty, AllocType);
             Function *ObjUpdateFunction =
               (Function*)SrcM->getOrInsertFunction(
+                //Paul: remove object count
                 "__obj_remove_count", VoidTy,
                 Int32Ty, Int64Ty, nullptr);
             Value *TmpOne = ConstantInt::get(Int64Ty, 1);
             Value *Param[2] = {AllocTypeV, TmpOne};
+            //Paul: create the call
             Builder.CreateCall(ObjUpdateFunction, Param);
           }
           break;
@@ -959,10 +1006,12 @@ namespace llvm {
               ConstantInt::get(Int32Ty, AllocType);
             Function *ObjUpdateFunction =
               (Function*)SrcM->getOrInsertFunction(
+                //Paul: remove obj count
                 "__obj_remove_count", VoidTy,
                 Int32Ty, Int64Ty, nullptr);
             Value *TmpOne = ConstantInt::get(Int64Ty, 1);
             Value *Param[2] = {AllocTypeV, TmpOne};
+            //Paul: create the call
             Builder.CreateCall(ObjUpdateFunction, Param);
           }
           break;
@@ -971,7 +1020,8 @@ namespace llvm {
       isFristEntry = false;
     }
   }
-
+  
+  //Paul: check which allocation type it is
   uint32_t getAllocType(std::string RuntimeFnName) {
     if (RuntimeFnName.compare("__update_stack_oinfo") == 0 ||
         RuntimeFnName.compare("__remove_stack_oinfo") == 0)
@@ -988,25 +1038,29 @@ namespace llvm {
     else
       return REALLOC;
   }
-
+  
+  //Paul: insert the update functions
   void HexTypeLLVMUtil::insertUpdate(Module *SrcM, IRBuilder<> &Builder,
                                  std::string RuntimeFnName, Value *ObjAddr,
                                  StructElementInfoTy &Elements,
                                  uint32_t TypeSize, Value *ArraySize,
                                  Value *ReallocAddr, BasicBlock *BasicBlock) {
     uint32_t AllocType = getAllocType(RuntimeFnName);
-    if (AllocType == REALLOC)
+    if (AllocType == REALLOC) 
+      //Paul: object tracing when realloc was used
       emitInstForObjTrace(SrcM, Builder, Elements, VLAOBJADD,
                           ObjAddr,
                           ArraySize, TypeSize, 0,
                           AllocType, ReallocAddr, BasicBlock);
     else if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
+      //Paul: object tracing when new() or reninterpret_cast() was used
       emitInstForObjTrace(SrcM, Builder, Elements, CONOBJADD,
                           ObjAddr, ArraySize, TypeSize, 0,
                           AllocType, NULL, BasicBlock);
     else if (dyn_cast<ConstantInt>(ArraySize) && AllocType != HEAPALLOC) {
       ConstantInt *constantSize = dyn_cast<ConstantInt>(ArraySize);
       for (uint32_t i=0; i<constantSize->getZExtValue(); i++)
+        //Paul: trace object when heap alloc was used
         emitInstForObjTrace(SrcM, Builder, Elements, CONOBJADD,
                             ObjAddr, ArraySize, TypeSize, i,
                             AllocType, NULL, BasicBlock);
@@ -1017,7 +1071,8 @@ namespace llvm {
                      ArraySize, TypeSize, 0,
                      AllocType, NULL, BasicBlock);
   }
-
+  
+  //Paul: insert remove functions
   void HexTypeLLVMUtil::insertRemove(Module *SrcM, IRBuilder<> &Builder,
                                  std::string RuntimeFnName, Value *ObjAddr,
                                  StructElementInfoTy &Elements,
@@ -1033,16 +1088,19 @@ namespace llvm {
     if (AllocType != HEAPALLOC && dyn_cast<ConstantInt>(ArraySize)) {
       ConstantInt *constantSize = dyn_cast<ConstantInt>(ArraySize);
       for (uint32_t i=0;i<constantSize->getZExtValue();i++)
+        //Paul: insert instruction for obj deletion, CONOBJDEL (DEL = delete)
         emitInstForObjTrace(SrcM, Builder, Elements, CONOBJDEL,
                             ObjAddr, ArraySize,
                             TypeSize, i, AllocType, NULL, NULL);
     }
     else
+      //Paul: insert instruction for obj deletion, CONOBJDEL (DEL = delete)
       emitInstForObjTrace(SrcM, Builder, Elements, VLAOBJDEL,
                           ObjAddr, ArraySize, TypeSize, 0,
                           AllocType, NULL, NULL);
   }
 
+  //Paul: strig manipulation function
   void HexTypeLLVMUtil::syncModuleName(std::string& TargetStr) {
     SmallVector<std::string, 12> RemoveStrs;
     RemoveStrs.push_back("./");
@@ -1054,20 +1112,23 @@ namespace llvm {
 
     removeTargetNum(TargetStr);
   }
-
+  
+  //Paul: get the hash value from string
   uint64_t HexTypeCommonUtil::getHashValueFromStr(std::string& str) {
     syncTypeName(str);
     unsigned char *className = new unsigned char[str.length() + 1];
     strcpy((char *)className, str.c_str());
     return crc64c(className);
   }
-
+  
+  //Paul: get hash value from struct type
   uint64_t HexTypeCommonUtil::getHashValueFromSTy(StructType *STy) {
     std::string str = STy->getName().str();
     syncTypeName(str);
     return getHashValueFromStr(str);
   }
-
+  
+  //Paul: ?
   bool HexTypeCommonUtil::isInterestingStructType(StructType *STy) {
     if (STy->isStructTy() &&
         STy->hasName() &&
@@ -1077,7 +1138,8 @@ namespace llvm {
 
     return false;
   }
-
+  
+  //Paul: ?
   static bool isInterestingArrayType(ArrayType *ATy) {
     Type *InnerTy = ATy->getElementType();
 
@@ -1089,7 +1151,8 @@ namespace llvm {
 
     return false;
   }
-
+  
+  //Paul: ?
   bool HexTypeCommonUtil::isInterestingType(Type *rootType) {
     if (StructType *STy = dyn_cast<StructType>(rootType))
       return isInterestingStructType(STy);
@@ -1117,7 +1180,8 @@ namespace llvm {
       }
     return Res;
   }
-
+  
+  //Paul: write to file util
   void HexTypeLLVMUtil::setTypeDetailInfo(StructType *STy,
                                           TypeDetailInfo &TargetDetailInfo,
                                           uint32_t AllTypeNum) {
@@ -1137,7 +1201,8 @@ namespace llvm {
     }
     return;
   }
-
+  
+  //Paul: ?
   void HexTypeLLVMUtil::parsingTypeInfo(StructType *STy, TypeInfo &NewType,
                                     uint32_t AllTypeNum) {
     NewType.StructTy = STy;

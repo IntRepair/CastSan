@@ -52,8 +52,12 @@
 #define numBadCastType3 34
 #define numBadCastType4 35
 
+//Paul: counting utility function
 void IncVal(int index, int count);
+//Paul: get the actual value of a count
 unsigned long getVal(int index);
+//Paul: print a type confusion
 void printTypeConfusion(int, uint64_t, uint64_t);
+//Paul: used to print statistics at the end when HexType terminates
 void InstallAtExitHandler();
 #endif

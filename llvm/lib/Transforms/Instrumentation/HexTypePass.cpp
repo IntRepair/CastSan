@@ -36,12 +36,19 @@ namespace {
 
     HexTypeLLVMUtil *HexTypeUtilSet;
     CallGraph *CG;
-
+    
+    //Paul: store alloca set info.
     std::list<AllocaInst *> AllAllocaSet;
+    //Paul: store lifetime end set, most likely to know when it is safe to delete obj from
+    //object type map
     std::map<AllocaInst *, IntrinsicInst *> LifeTimeEndSet;
+    //Paul: as above but this is the start set.
     std::map<AllocaInst *, IntrinsicInst *> LifeTimeStartSet;
+    //Paul: return instruction set
     std::map<Function *, std::vector<Instruction *> *> ReturnInstSet;
+    //Paul: all allocations with function set
     std::map<Instruction *, Function *> AllAllocaWithFnSet;
+    //Paul: cast map
     std::map<Function*, bool> mayCastMap;
 
     void getAnalysisUsage(AnalysisUsage &Info) const {
@@ -90,11 +97,13 @@ namespace {
             ConstantInt::get(HexTypeUtilSet->Int64Ty, size),
             ConstantInt::get(HexTypeUtilSet->Int32Ty, 1),
             ConstantInt::get(HexTypeUtilSet->Int1Ty, 0) };
+          //Paul: create call of the memcpy function with given params
           B.CreateCall(MemcpyFunc, Param);
         }
       }
     }
-
+    
+    //Paul: determine the start and end time for an instruction and store it
     void collectLifeTimeInfo(Instruction *I) {
       if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I))
         if ((II->getIntrinsicID() == Intrinsic::lifetime_start)
@@ -115,7 +124,8 @@ namespace {
           }
         }
     }
-
+    
+    //Paul: collect alloca info.
     void collectAllocaInstInfo(Instruction *I) {
       if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
         if (HexTypeUtilSet->isInterestingType(AI->getAllocatedType())) {
@@ -127,7 +137,8 @@ namespace {
           AllAllocaSet.push_back(AI);
         }
     }
-
+    
+    //Paul: handle an alloca add
     void handleAllocaAdd(Module &M) {
       for (AllocaInst *AI : AllAllocaSet) {
         Instruction *next = HexTypeUtilSet->findNextInstruction(AI);
@@ -180,7 +191,8 @@ namespace {
                                      ArraySizeF, NULL, NULL);
       }
     }
-
+    
+    //Paul: find return instructions
     void findReturnInsts(Function *f) {
       std::vector<Instruction*> *TempInstSet = new std::vector<Instruction *>;
       for (inst_iterator j = inst_begin(f), E = inst_end(f); j != E; ++j)
@@ -190,7 +202,8 @@ namespace {
       ReturnInstSet.insert(std::pair<Function *,
                            std::vector<Instruction *>*>(f, TempInstSet));
     }
-
+    
+    //Paul: handle an alloca delete
     void handleAllocaDelete(Module &M) {
       std::map<Instruction *, Function *>::iterator LocalBegin, LocalEnd;
       LocalBegin = AllAllocaWithFnSet.begin();
@@ -312,7 +325,8 @@ namespace {
       *isComplete = isCurrentComplete;
       return false;
     }
-
+    
+    //Paul: ?
     bool isSafeStackFn(Function *F) {
       assert(F && "Function can't be null");
 
@@ -389,7 +403,8 @@ namespace {
       BuilderGlobal.CreateRetVoid();
       appendToGlobalCtors(M, FGlobal, 0);
     }
-
+    
+    //Paul: emit type info as global value
     void emitTypeInfoAsGlobalVal(Module &M) {
       std::string mname = M.getName();
       HexTypeUtilSet->syncModuleName(mname);
@@ -404,7 +419,8 @@ namespace {
                         &(HexTypeUtilSet->typeInfoArray));
 
     }
-
+   
+    //Paul: generic module start funciton
     virtual bool runOnModule(Module &M) {
       // init HexTypePass
       CG = &getAnalysis<CallGraphWrapperPass>().getCallGraph();
@@ -421,9 +437,11 @@ namespace {
         HexTypeUtilSet->setCastingRelatedSet();
 
       // Global object tracing
+      //Paul: global obj tracing
       globalObjTracing(M);
 
       // Stack object tracing
+      //Paul: stack obj tracing
       stackObjTracing(M);
       return false;
     }

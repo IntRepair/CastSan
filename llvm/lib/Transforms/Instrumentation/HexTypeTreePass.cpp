@@ -39,7 +39,8 @@ namespace {
     TargetLibraryInfoImpl tlii;
 
     HexTypeLLVMUtil *HexTypeUtilSet;
-
+    
+    //Paul: annotate IR code such that we can update phantom info for objects
     void emitPhantomTypeInfo(Module &M) {
       FunctionType *FTy = FunctionType::get(HexTypeUtilSet->VoidTy, false);
       Function *F = Function::Create(FTy, GlobalValue::InternalLinkage,
@@ -53,18 +54,23 @@ namespace {
       IRBuilder<> Builder(BB);
 
       std::string initName = "__update_phantom_info";
+      //Paul: get the ypdate phantom info function or insert it
       Constant *GCOVInit = M.getOrInsertFunction(initName,
                                                  HexTypeUtilSet->VoidTy,
                                                  HexTypeUtilSet->Int64PtrTy,
                                                  nullptr);
+      //Paul: create a call 
       Builder.CreateCall(GCOVInit,
                          Builder.CreatePointerCast(
                            HexTypeUtilSet->typePhantomInfoArrayGlobal,
                            HexTypeUtilSet->Int64PtrTy));
+      //Paul: the above call returns void
       Builder.CreateRetVoid();
+      //Paul: ?
       appendToGlobalCtors(M, F, 0);
     }
-
+    
+    //Paul: instrument IR with object tracing functions
     void emitExtendObjTraceInst(Module &M, int hashIndex,
                                 CallInst *call, int extendTarget) {
       ConstantInt *HashValueConst =
@@ -86,9 +92,11 @@ namespace {
       }
 
       std::string funName;
+      //Paul: for the new operator
       if (extendTarget == PLACEMENTNEW)
         funName.assign("__placement_new_handle");
       else
+        //Paul: for the reinterpret cast 
         funName.assign("__reinterpret_casting_handle");
 
       Instruction *next = HexTypeUtilSet->findNextInstruction(call);
@@ -109,7 +117,8 @@ namespace {
                                    Elements, 0, NULL, NULL, NULL);
       if (ClMakeLogInfo) {
         Function *ObjUpdateFunction =
-          (Function*)M.getOrInsertFunction(
+            //Paul: insert the object update count function
+            (Function*)M.getOrInsertFunction(
             "__obj_update_count", HexTypeUtilSet->VoidTy,
             HexTypeUtilSet->Int32Ty,
             HexTypeUtilSet->Int64Ty,
@@ -121,10 +130,12 @@ namespace {
           AllocType = ConstantInt::get(HexTypeUtilSet->Int32Ty, REINTERPRET);
         Value *TmpOne = ConstantInt::get(HexTypeUtilSet->Int64Ty, 1);
         Value *Param[2] = {AllocType, TmpOne};
+        //Paul: create the the call to obj update function with params
         Builder.CreateCall(ObjUpdateFunction, Param);
       }
     }
-
+    
+    //Paul: 
     void extendClangInstrumentation(Module &M) {
       for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F)
         for (Function::iterator BB = F->begin(), E = F->end(); BB != E;) {
@@ -138,8 +149,10 @@ namespace {
                     FnName.compare("__reinterpret_casting_handle") == 0) {
                   if (HexTypeUtilSet->AllTypeInfo.size() > 0) {
                     if (FnName.compare("__placement_new_handle") == 0)
+                      //Paul: trace the new operator
                       emitExtendObjTraceInst(M, 1, call, PLACEMENTNEW);
                     else if (FnName.compare("__reinterpret_casting_handle") == 0)
+                      //Paul: trace the reinterpret instruction
                       emitExtendObjTraceInst(M, 1, call, REINTERPRET);
                   }
                   (&*i)->eraseFromParent();
@@ -151,7 +164,8 @@ namespace {
             BB++;
         }
     }
-
+    
+    //Paul: emit type info as global value
     void emitTypeInfoAsGlobalVal(Module &M) {
       std::string mname = M.getName();
       HexTypeUtilSet->syncModuleName(mname);
@@ -172,10 +186,11 @@ namespace {
       HexTypeUtilSet->typePhantomInfoArrayGlobal =
         HexTypeUtilSet->emitAsGlobalVal(M, PhantomSetGlobalValName,
                         &HexTypeUtilSet->typePhantomInfoArray);
-
+      //Paul: emit phantom type info
       emitPhantomTypeInfo(M);
     }
-
+    
+    //Paul: check if it is alloca call
     bool isAllocCall(CallInst *val) {
       if (isAllocationFn(val, this->tli) &&
           (isMallocLikeFn(val, this->tli) || isCallocLikeFn(val, this->tli) ||
@@ -183,7 +198,8 @@ namespace {
         return true;
       return false;
     }
-
+    
+    //Paul: collect heap allocations
     void collectHeapAlloc(CallInst *call,
                         std::map<CallInst *, Type *> *heapObjsNew) {
       std::string functionName;
@@ -219,7 +235,8 @@ namespace {
 
       return;
     }
-
+    
+    //Paul: collect free usages
     void collectFree(CallInst *call, Instruction *InstPrev,
                    std::map<CallInst *, Type *> *heapObjsFree) {
       if (isFreeCall(call, this->tli))
@@ -234,7 +251,8 @@ namespace {
 
       return;
     }
-
+    
+    //Paul: check if it is a realloc function
     bool isReallocFn(Function *F) {
       std::string funName = F->getName().str();
       if ((funName.find("realloc") != std::string::npos))
@@ -242,7 +260,8 @@ namespace {
 
       return false;
     }
-
+    
+    //Paul: handle the heap alloc 
     void handleHeapAlloc(Module &M, std::map<CallInst *, Type *> *heapObjsNew) {
       for (std::map<CallInst *, Type *>::iterator it=heapObjsNew->begin();
            it!=heapObjsNew->end(); ++it) {
@@ -286,6 +305,8 @@ namespace {
 
         if (ArraySizeF) {
           if (isRealloc == 1)
+            //Paul: this functions will call into the runtime-rt to make necessary
+            //object information updates
             HexTypeUtilSet->insertUpdate(&M, Builder, "__update_realloc_oinfo",
                                          (Value *)(it->first), offsets,
                                          HexTypeUtilSet->DL.getTypeAllocSize(
@@ -294,6 +315,7 @@ namespace {
                                          NULL);
 
           else
+            //Paul: the same as above but for heap allocations
             HexTypeUtilSet->insertUpdate(&M, Builder, "__update_heap_oinfo",
                                          (Value *)(it->first), offsets,
                                          HexTypeUtilSet->DL.getTypeAllocSize(
@@ -302,7 +324,9 @@ namespace {
         }
       }
     }
-
+    
+    //Paul: in case of a free operation it will be called in the compiler-rt the
+    //remove heap object info
     void handleFree(Module &M, std::map<CallInst *, Type *> *heapObjsFree) {
       for (std::map<CallInst *, Type *>::iterator it=heapObjsFree->begin();
            it!=heapObjsFree->end(); ++it) {
@@ -317,7 +341,8 @@ namespace {
                                      NULL);
       }
     }
-
+    
+    //Paul: heap object tracing
     void heapObjTracing(Module &M) {
       Instruction *InstPrev;
       this->tli = new TargetLibraryInfo(tlii);
@@ -335,7 +360,8 @@ namespace {
 
           handleHeapAlloc(M, &heapObjsNew);
           handleFree(M, &heapObjsFree);
-
+          
+          //Paul: heap and new object removal
           heapObjsFree.clear();
           heapObjsNew.clear();
         }
@@ -365,7 +391,8 @@ namespace {
 
       return true;
     }
-
+    
+    //Paul: check if is an heap object
     bool isHeapObj(CallInst *call) {
       bool isOverloadedNew = false;
       std::string functionName = "";
@@ -400,7 +427,8 @@ namespace {
 
       return false;
     }
-
+    
+    //Paul: ?
     bool isSafeSrcValue(Value *SrcValue, Module::iterator F,
                      Module *M) {
       // source is global variable
@@ -458,7 +486,8 @@ namespace {
 
       return false;
     }
-
+    
+    //Paul: see above function
     bool compiletime_verification(Value *SrcValue, Module::iterator F,
                                   Module *M) {
       if (isSafeSrcValue(SrcValue, F, M)) {
@@ -470,7 +499,9 @@ namespace {
 
       return false;
     }
-
+    
+    //Paul: remvoe the basic blocks which are calling the type cast verification
+    //functions.
     void compileTimeVerification(Module &M) {
       for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F)
         for (Function::iterator BB = F->begin(), E = F->end(); BB != E;) {
@@ -484,7 +515,8 @@ namespace {
                      functionName.compare("__type_casting_verification_changing") == 0))
                   if (PtrToIntInst *SrcValue =
                       dyn_cast<PtrToIntInst>(call->getArgOperand(0)))
-                    if (compiletime_verification(SrcValue->getPointerOperand(),
+                      //Paul: ?
+                      if (compiletime_verification(SrcValue->getPointerOperand(),
                                                  F, &M)) {
                       (&*i)->eraseFromParent();
                       isRemoved = true;
@@ -496,7 +528,8 @@ namespace {
             BB++;
         }
     }
-
+    
+    //Paul: some optimization, todo
     void typecastinginlineoptimization(Module &M)  {
       GlobalVariable* ResultCache = HexTypeUtilSet->getVerifyResultCache(M);
       GlobalVariable* GObjTypeMap = HexTypeUtilSet->getObjTypeMap(M);
@@ -702,7 +735,8 @@ namespace {
             BB++;
         }
     }
-
+    
+    //Paul: generic function for starting the module
     virtual bool runOnModule(Module &M) {
       // Init HexTypeUtil
       HexTypeLLVMUtil HexTypeUtilSetT(M.getDataLayout());
@@ -710,28 +744,34 @@ namespace {
       HexTypeUtilSet->initType(M);
 
       // Create type releationship information
+      //Paul: todo
       HexTypeUtilSet->createObjRelationInfo(M);
       if (HexTypeUtilSet->AllTypeInfo.size() > 0)
         emitTypeInfoAsGlobalVal(M);
 
       // Init for only tracing casting related objects
+      //Paul: todo
       if (ClCastObjOpt || ClCreateCastRelatedTypeList)
         HexTypeUtilSet->setCastingRelatedSet();
       if (ClCreateCastRelatedTypeList)
         HexTypeUtilSet->extendCastingRelatedTypeSet();
 
       // Apply typecasting inline optimization
+      //Paul: todo
       if (ClInlineOpt)
         typecastinginlineoptimization(M);
 
       // Apply compile time verfication optimization
+      //Paul: todo
       if (ClCompileTimeVerifyOpt)
         compileTimeVerification(M);
 
       // Heap object trace
+      //Paul: todo
       heapObjTracing(M);
 
       // Extend HexType's clang Instrumentation
+      //Paul: todo
       extendClangInstrumentation(M);
 
       return false;

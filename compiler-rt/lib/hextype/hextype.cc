@@ -348,18 +348,21 @@ void __type_casting_verification_print_cache_result(const uint64_t index) {
 #endif
 }
 
+//Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_inline_normal(uptr* const SrcAddr,
                                                const uint64_t DstTypeHashValue) {
   verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue);
 }
 
+//Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification(uptr* const SrcAddr,
                                        const uint64_t DstTypeHashValue) {
   verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue);
 }
 
+//Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_changing(uptr* const SrcAddr,
                                           uptr* const DstAddr,
@@ -367,6 +370,7 @@ void __type_casting_verification_changing(uptr* const SrcAddr,
   verifyTypeCasting(SrcAddr, DstAddr, DstTypeHashValue);
 }
 
+//Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void* __dynamic_casting_verification(uptr* const SrcAddr,
                                      const uint64_t DstTypeHashValue,
@@ -375,6 +379,7 @@ void* __dynamic_casting_verification(uptr* const SrcAddr,
   return verifyTypeCasting(SrcAddr, TmpAddr, DstTypeHashValue);
 }
 
+//Paul: update object information
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
                            const int Offset,
@@ -408,6 +413,7 @@ void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
   ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
 }
 
+//Paul: update direct object information inlined
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_direct_oinfo_inline(uptr* const AllocAddr,
                                   const uint64_t TypeHashValue,
@@ -418,12 +424,14 @@ void __update_direct_oinfo_inline(uptr* const AllocAddr,
   IncVal(numUpdateMiss, 1);
 #endif
   if (ObjTypeMap[MapIndex].HexTree == nullptr)
+    //Paul: create new rb tree here
     ObjTypeMap[MapIndex].HexTree = rbtree_create();
 
   ObjTypeMapEntry *ObjValue =
     (ObjTypeMapEntry*)malloc(sizeof(ObjTypeMapEntry));
   memcpy(ObjValue, &ObjTypeMap[MapIndex], sizeof(ObjTypeMapEntry));
-
+  
+  //Paul: insert in the rb tree
   rbtree_insert(ObjTypeMap[MapIndex].HexTree,
                 ObjTypeMap[MapIndex].ObjAddr, ObjValue);
   ObjTypeMap[MapIndex].ObjAddr = AllocAddr;
@@ -433,6 +441,7 @@ void __update_direct_oinfo_inline(uptr* const AllocAddr,
   ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
 }
 
+//Paul: handle reinterpret cast function
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __handle_reinterpret_cast(uptr* const AllocAddr,
                                const uint64_t TypeHashValue,
@@ -444,9 +453,11 @@ void __handle_reinterpret_cast(uptr* const AllocAddr,
       return;
     //  verifyTypeCasting(AllocAddr, AllocAddr, TypeHashValue);
   }
+  //Paul: it calls this function located above.
   __update_direct_oinfo(AllocAddr, TypeHashValue, -1, RuleAddr);
 }
 
+//Paul: update object information.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
                     const int Offset,
@@ -488,8 +499,10 @@ void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
   }
 }
 
+//Paul: remove object address from object type map
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __remove_direct_oinfo(uptr* const TargetAddr) {
+  //Paul: get hash first
   uptr MapIndex = getHash((uptr)TargetAddr);
 
   if (ObjTypeMap[MapIndex].ObjAddr == TargetAddr) {
@@ -502,14 +515,18 @@ void __remove_direct_oinfo(uptr* const TargetAddr) {
   if (ObjTypeMap[MapIndex].HexTree != nullptr &&
       ObjTypeMap[MapIndex].HexTree->root != nullptr) {
     ObjTypeMapEntry* FindValue =
+      //Paul: rb tree look-up
       (ObjTypeMapEntry *)rbtree_lookup(ObjTypeMap[MapIndex].HexTree, TargetAddr);
     if (FindValue != nullptr) {
+      //Paul: erase the value
       free(FindValue);
+      //Paul: delete from the rb tree
       rbtree_delete(ObjTypeMap[MapIndex].HexTree, TargetAddr);
     }
   }
 }
 
+//Paul: same as remove direct function 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __remove_direct_oinfo_inline(uptr* const TargetAddr,
                                   const uint64_t MapIndex) {
@@ -524,6 +541,7 @@ void __remove_direct_oinfo_inline(uptr* const TargetAddr,
   }
 }
 
+//Paul: another remove version
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
                     unsigned long ArraySize, const uint32_t AllocType) {
@@ -564,6 +582,7 @@ void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
       if (ObjTypeMap[MapIndex].HexTree != nullptr &&
           ObjTypeMap[MapIndex].HexTree->root != nullptr) {
         ObjTypeMapEntry* FindValue =
+          //Paul: rb look-up
           (ObjTypeMapEntry *)rbtree_lookup(ObjTypeMap[MapIndex].HexTree, addr);
         if (FindValue != nullptr) {
           free(FindValue);
@@ -574,6 +593,7 @@ void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
   }
 }
 
+//Paul: update phantom info
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_phantom_info(uint64_t *const PhantomInfo) {
   if (ObjTypeMap == nullptr) {
@@ -587,6 +607,7 @@ void __update_phantom_info(uint64_t *const PhantomInfo) {
     VerifyResultCache = new VerifyResultEntry[NUMCACHE];
 
   if (ObjPhantomInfo == nullptr)
+    //Paul: new object phantom info map
     ObjPhantomInfo = new std::unordered_map<uint64_t, PhantomHashSet*>;
 
   uint64_t pos = 0;
@@ -609,17 +630,22 @@ void __update_phantom_info(uint64_t *const PhantomInfo) {
       if (it2 != ObjPhantomInfo->end()) {
         if (it2->second != NULL && it2->second != PhantomSet)
           PhantomSet->insert(it2->second->begin(), it2->second->end());
+        //Paul: remove from the object phantom info map
         ObjPhantomInfo->erase(it2);
+        //Paul: insert into the object phantom map
         ObjPhantomInfo->insert(make_pair(innerHash, PhantomSet));
       }
+      //Paul: insert into the phantom set
       PhantomSet->insert(innerHash);
     }
     if(!isExist)
+      //Paul: insert in the object phatom info map the value: phantom set, key: type hash
       ObjPhantomInfo->insert(make_pair(TypeHash, PhantomSet));
   }
 }
 
 #ifdef HEX_LOG
+//Paul: used for logging
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __lookup_success_count(char VerifyResult) {
   IncVal(numCasting, 1);
@@ -643,6 +669,7 @@ void __lookup_success_count(char VerifyResult) {
   }
 }
 
+//Paul: count object updates
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __obj_update_count(uint32_t objUpdateType, uint64_t vla) {
   switch (objUpdateType) {
@@ -652,7 +679,7 @@ void __obj_update_count(uint32_t objUpdateType, uint64_t vla) {
   case GLOBALALLOC:
     IncVal(numGloUp, vla);
     break;
-  case HEAPALLOC:
+  case HEAPALLOC: //Paul: todo
   case REALLOC:
     IncVal(numHeapUp, vla);
     break;
@@ -665,6 +692,7 @@ void __obj_update_count(uint32_t objUpdateType, uint64_t vla) {
   }
 }
 
+//Paul: remove count
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __obj_remove_count(uint32_t objUpdateType, uint64_t vla) {
   switch (objUpdateType) {
