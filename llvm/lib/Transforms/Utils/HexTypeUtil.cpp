@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <iostream>
 
 #define MAXLEN 1000
 
@@ -355,6 +356,20 @@ namespace llvm {
     return;
   }
 
+  int HexTypeLLVMUtil::buildFakeVTables(int start, int t, int root) {
+    for (int i = 0; i < AllTypeInfo[t].FakeVPointers.size(); i++)
+      if (AllTypeInfo[t].FakeVPointers[i].first == root)
+        return start;
+    AllTypeInfo[t].FakeVPointers.push_back(std::make_pair(root, start));
+    start = start + 1;
+    for (int i = 0; i < AllTypeInfo[t].DirectChildren.size(); i++)
+    {
+      start = buildFakeVTables(start, AllTypeInfo[t].DirectChildren[i], root);
+      start = start + 1;
+    }
+    return start;
+  }
+
   void HexTypeLLVMUtil::extendTypeRelationInfo() {
     for (uint32_t i=0;i<AllTypeNum;i++)
       for (uint32_t j=0;j<AllTypeInfo[i].DirectParents.size();j++)
@@ -363,6 +378,14 @@ namespace llvm {
               (AllTypeInfo[i].DirectParents[j].TypeHashValue ==
                AllTypeInfo[t].DetailInfo.TypeHashValue)) {
             AllTypeInfo[i].DirectParents[j].TypeIndex = t;
+
+            bool knownChild = false;
+            for (int k = 0; k < AllTypeInfo[t].DirectChildren.size(); k++)
+              if (AllTypeInfo[t].DirectChildren[k] == i)
+                knownChild = true;
+
+            if (!knownChild)
+              AllTypeInfo[t].DirectChildren.push_back(i);
 
             if (DL.getTypeAllocSize(AllTypeInfo[i].StructTy) ==
                 DL.getTypeAllocSize(AllTypeInfo[t].StructTy)) {
@@ -374,12 +397,27 @@ namespace llvm {
             }
           }
 
+    int count = 0;
+    for (uint32_t i=0;i<AllTypeNum;i++)
+      if (!AllTypeInfo[i].DirectParents.size())
+        count = buildFakeVTables(count, i, count);
+
     for (uint32_t i=0;i<AllTypeNum;i++) {
       std::fill_n(VisitCheck, AllTypeNum, false);
       extendParentSet(i, i);
 
       std::fill_n(VisitCheck, AllTypeNum, false);
       extendPhantomSet(i, i);
+    }
+    
+    for (uint32_t i=0;i<AllTypeNum;i++)
+    {
+        std::cerr << "Type " << AllTypeInfo[i].DetailInfo.TypeHashValue << ": ";
+	    for (int k = 0; k < AllTypeInfo[i].FakeVPointers.size(); k++)
+	    {
+		    std::cerr << "VPointer " << AllTypeInfo[i].FakeVPointers[k].second << " of root " << AllTypeInfo[AllTypeInfo[i].FakeVPointers[k].first].DetailInfo.TypeHashValue << ", ";
+	    }
+	    std::cerr << std::endl;
     }
   }
   

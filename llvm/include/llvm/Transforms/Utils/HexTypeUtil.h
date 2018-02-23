@@ -58,6 +58,8 @@ namespace llvm {
     uint32_t ElementSize;
 
     std::vector<TypeDetailInfo> DirectParents;
+    std::vector<int> DirectChildren;
+    std::vector<std::pair<int, int>> FakeVPointers;
     std::vector<TypeDetailInfo> DirectPhantomTypes;
     std::vector<TypeDetailInfo> AllParents;
     std::vector<TypeDetailInfo> AllPhantomTypes;
@@ -135,6 +137,7 @@ namespace llvm {
     void setTypeDetailInfo(StructType *, TypeDetailInfo &, uint32_t);
 
     void extendParentSet(int , int );
+    int buildFakeVTables(int start, int t, int root);
     void extendPhantomSet(int , int );
     void extendTypeRelationInfo();
     void sortSet(std::set<uint64_t> &);
