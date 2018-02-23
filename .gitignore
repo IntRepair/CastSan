@@ -28,6 +28,7 @@ libdyncast/libdyncast.a
 .clang
 
 binutils/*
+setup_dir/*
 
 #==============================================================================#
 # Explicit files to ignore (only matches one).
