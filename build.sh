@@ -15,6 +15,10 @@ rm ./llvm/projects/compiler-rt
 ln -s ../../clang llvm/tools/clang
 ln -s ../../compiler-rt llvm/projects/compiler-rt
 
+cd libdyncast
+make
+cd ..
+
 # build HexType
 case "$(uname -s)" in
   Darwin)
