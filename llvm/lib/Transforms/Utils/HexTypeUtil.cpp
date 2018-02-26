@@ -268,6 +268,7 @@ namespace llvm {
     std::vector<StructType*> Types = M.getIdentifiedStructTypes();
     for (StructType *ST : Types) {
       TypeInfo NewType;
+      std::cerr << "New Type: " << ST->getName().data() << std::endl;
       if (!HexTypeCommonUtil::isInterestingStructType(ST))
         continue;
 
@@ -400,7 +401,7 @@ namespace llvm {
     int count = 0;
     for (uint32_t i=0;i<AllTypeNum;i++)
       if (!AllTypeInfo[i].DirectParents.size())
-        count = buildFakeVTables(count, i, count);
+        count = buildFakeVTables(count, i, i);
 
     for (uint32_t i=0;i<AllTypeNum;i++) {
       std::fill_n(VisitCheck, AllTypeNum, false);
@@ -412,10 +413,10 @@ namespace llvm {
     
     for (uint32_t i=0;i<AllTypeNum;i++)
     {
-        std::cerr << "Type " << AllTypeInfo[i].DetailInfo.TypeHashValue << ": ";
+	    std::cerr << "Type " << AllTypeInfo[i].DetailInfo.TypeName << ": ";
 	    for (int k = 0; k < AllTypeInfo[i].FakeVPointers.size(); k++)
 	    {
-		    std::cerr << "VPointer " << AllTypeInfo[i].FakeVPointers[k].second << " of root " << AllTypeInfo[AllTypeInfo[i].FakeVPointers[k].first].DetailInfo.TypeHashValue << ", ";
+		    std::cerr << "VPointer " << AllTypeInfo[i].FakeVPointers[k].second << " of root " << AllTypeInfo[AllTypeInfo[i].FakeVPointers[k].first].DetailInfo.TypeName << ", ";
 	    }
 	    std::cerr << std::endl;
     }
