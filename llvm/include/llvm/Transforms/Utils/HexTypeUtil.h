@@ -56,6 +56,7 @@ namespace llvm {
     StructType *StructTy;
     TypeDetailInfo DetailInfo;
     uint32_t ElementSize;
+    bool isRoot = false;
 
     std::vector<TypeDetailInfo> DirectParents;
     std::vector<int> DirectChildren;
@@ -138,6 +139,7 @@ namespace llvm {
 
     void extendParentSet(int , int );
     int buildFakeVTables(int start, int t, int root);
+    void findDiamonds(std::vector<int> & children, int t);
     void extendPhantomSet(int , int );
     void extendTypeRelationInfo();
     void sortSet(std::set<uint64_t> &);

@@ -363,16 +363,50 @@ namespace llvm {
         return start;
     AllTypeInfo[t].FakeVPointers.push_back(std::make_pair(root, start));
     start = start + 1;
-    for (int i = 0; i < AllTypeInfo[t].DirectChildren.size(); i++)
+
+    if (AllTypeInfo[t].isRoot && root != t)
     {
-      start = buildFakeVTables(start, AllTypeInfo[t].DirectChildren[i], root);
-      start = start + 1;
+      start = buildFakeVTables(start, t, t);
+    }
+    else
+    {
+      for (int i = 0; i < AllTypeInfo[t].DirectChildren.size(); i++)
+      {
+        start = buildFakeVTables(start, AllTypeInfo[t].DirectChildren[i], root);
+      }
     }
     return start;
   }
 
+  void HexTypeLLVMUtil::findDiamonds(std::vector<int> & childs, int cur) {
+    for (int i = 0; i < AllTypeInfo[cur].DirectChildren.size(); i++)
+    {
+      for (int k = 0; k < childs.size(); k++)
+      {
+        if (childs[k] == AllTypeInfo[cur].DirectChildren[i])
+        {
+          if (!AllTypeInfo[cur].isRoot)
+          {
+            std::cerr << " -- Diamond Detected: Type " << AllTypeInfo[cur].DetailInfo.TypeName << " is a diamond root." << std::endl;
+            AllTypeInfo[cur].isRoot = true;
+            std::vector<int> newChilds;
+            findDiamonds(newChilds, cur);
+            return;
+          }
+        }
+      }
+      childs.push_back(AllTypeInfo[cur].DirectChildren[i]);
+      findDiamonds(childs, AllTypeInfo[cur].DirectChildren[i]);
+    }
+  }
+
   void HexTypeLLVMUtil::extendTypeRelationInfo() {
     for (uint32_t i=0;i<AllTypeNum;i++)
+    {
+      if (!AllTypeInfo[i].DirectParents.size())
+      {
+        AllTypeInfo[i].isRoot = true;
+      }
       for (uint32_t j=0;j<AllTypeInfo[i].DirectParents.size();j++)
         for (uint32_t t=0;t<AllTypeNum;t++)
           if (i != t &&
@@ -397,7 +431,17 @@ namespace llvm {
                 AllTypeInfo[i].DetailInfo);
             }
           }
+    }
 
+    for (uint32_t i=0;i<AllTypeNum;i++)
+    {
+      if (AllTypeInfo[i].isRoot)
+      {
+        std::vector<int> children;
+        findDiamonds(children, i);
+      }
+    }
+    
     int count = 0;
     for (uint32_t i=0;i<AllTypeNum;i++)
       if (!AllTypeInfo[i].DirectParents.size())
@@ -413,12 +457,12 @@ namespace llvm {
     
     for (uint32_t i=0;i<AllTypeNum;i++)
     {
-	    std::cerr << "Type " << AllTypeInfo[i].DetailInfo.TypeName << ": ";
-	    for (int k = 0; k < AllTypeInfo[i].FakeVPointers.size(); k++)
-	    {
-		    std::cerr << "VPointer " << AllTypeInfo[i].FakeVPointers[k].second << " of root " << AllTypeInfo[AllTypeInfo[i].FakeVPointers[k].first].DetailInfo.TypeName << ", ";
-	    }
-	    std::cerr << std::endl;
+        std::cerr << "Type " << AllTypeInfo[i].DetailInfo.TypeName << ": ";
+        for (int k = 0; k < AllTypeInfo[i].FakeVPointers.size(); k++)
+        {
+            std::cerr << "VPointer " << AllTypeInfo[i].FakeVPointers[k].second << " of root " << AllTypeInfo[AllTypeInfo[i].FakeVPointers[k].first].DetailInfo.TypeName << ", ";
+        }
+        std::cerr << std::endl;
     }
   }
   
