@@ -366,15 +366,19 @@ namespace llvm {
 
     if (AllTypeInfo[t].isRoot && root != t)
     {
-      start = buildFakeVTables(start, t, t);
+        for (int i = 0; i < AllTypeInfo[t].DiamondRootInTree.size(); i++)
+        {
+            if (AllTypeInfo[t].DiamondRootInTree[i] == root)
+            {
+                return start;
+            }
+        }
     }
-    else
-    {
-      for (int i = 0; i < AllTypeInfo[t].DirectChildren.size(); i++)
-      {
+
+    // TODO: parents from llvm StructType are too many, get precise info from clang!
+    for (int i = 0; i < AllTypeInfo[t].DirectChildren.size(); i++)
         start = buildFakeVTables(start, AllTypeInfo[t].DirectChildren[i], root);
-      }
-    }
+
     return start;
   }
 
@@ -387,15 +391,30 @@ namespace llvm {
         {
           if (!AllTypeInfo[cur].isRoot)
           {
-            std::cerr << " -- Diamond Detected: Type " << AllTypeInfo[cur].DetailInfo.TypeName << " is a diamond root." << std::endl;
+	        std::cerr << std::endl << " -- Diamond Detected: Type " << AllTypeInfo[cur].DetailInfo.TypeName << " is a diamond root in tree " << AllTypeInfo[childs[0]].DetailInfo.TypeName << std::endl;
+	        std::cerr << "Childs: ";
+	        for (int z = 0; z < childs.size(); z++)
+	        {
+		        std::cerr << AllTypeInfo[childs[z]].DetailInfo.TypeName << ", ";
+	        }
+	        std::cerr << std::endl;
+
+	        std::cerr << "Childs of " << AllTypeInfo[cur].DetailInfo.TypeName << ": ";
+	        for (int z = 0; z < AllTypeInfo[cur].DirectChildren.size(); z++)
+		        std::cerr << AllTypeInfo[AllTypeInfo[cur].DirectChildren[z]].DetailInfo.TypeName << ", ";
+	        std::cerr << std::endl;
             AllTypeInfo[cur].isRoot = true;
-            std::vector<int> newChilds;
+            AllTypeInfo[cur].DiamondRootInTree.push_back(childs[0]);
+            std::vector<int> newChilds = { cur };
+            std::cerr << " Finding Diamonds " << AllTypeInfo[cur].DetailInfo.TypeName << ": ";
             findDiamonds(newChilds, cur);
+            std::cerr << std::endl;
             return;
           }
         }
       }
       childs.push_back(AllTypeInfo[cur].DirectChildren[i]);
+      std::cerr << AllTypeInfo[AllTypeInfo[cur].DirectChildren[i]].DetailInfo.TypeName << ", ";
       findDiamonds(childs, AllTypeInfo[cur].DirectChildren[i]);
     }
   }
@@ -420,7 +439,10 @@ namespace llvm {
                 knownChild = true;
 
             if (!knownChild)
+            {
               AllTypeInfo[t].DirectChildren.push_back(i);
+              std::cerr << AllTypeInfo[i].DetailInfo.TypeName << " is a child of " << AllTypeInfo[t].DetailInfo.TypeName << std::endl;
+            }
 
             if (DL.getTypeAllocSize(AllTypeInfo[i].StructTy) ==
                 DL.getTypeAllocSize(AllTypeInfo[t].StructTy)) {
@@ -437,14 +459,17 @@ namespace llvm {
     {
       if (AllTypeInfo[i].isRoot)
       {
-        std::vector<int> children;
+        std::vector<int> children = { (int)i };
+        std::cerr << " Finding Diamonds " << AllTypeInfo[i].DetailInfo.TypeName << ": ";
         findDiamonds(children, i);
+        std::cerr << std::endl;
       }
     }
     
     int count = 0;
     for (uint32_t i=0;i<AllTypeNum;i++)
-      if (!AllTypeInfo[i].DirectParents.size())
+      if (AllTypeInfo[i].isRoot)
+      
         count = buildFakeVTables(count, i, i);
 
     for (uint32_t i=0;i<AllTypeNum;i++) {
@@ -1299,6 +1324,7 @@ namespace llvm {
         if (innerSTy && isInterestingStructType(innerSTy)) {
           TypeDetailInfo ParentTmp;
           setTypeDetailInfo(innerSTy, ParentTmp, 0);
+          std::cerr << "Parsing " << NewType.DetailInfo.TypeName << " is a child of " << ParentTmp.TypeName << std::endl;
           NewType.DirectParents.push_back(ParentTmp);
         }
       }

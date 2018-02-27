@@ -33,7 +33,12 @@ struct F {
   virtual void y();
 };
 
-struct E : public F, B {
+struct X {
+  int x;
+  virtual void x2();
+};
+
+struct E : public F, B, X {
   int e;
 //  virtual void x();
   virtual void g ();
