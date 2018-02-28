@@ -69,6 +69,7 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
         RD->printQualifiedName(OS);
         //TheCXXABI.getMangleContext().mangleCXXRTTI(Context.getTypeDeclType(RD),
         //              OS);
+        
       }
       else {
         OS << RD->getKindName() << '.';
@@ -100,6 +101,23 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
  if (isa<CXXRecordDecl>(RD))
   {
 	  auto name = CGM.getCXXABI().GetClassMangledName(static_cast<const CXXRecordDecl*>(RD));
+	  std::cerr << " ========== Got Type: " << name << std::endl;
+
+	  if (static_cast<const CXXRecordDecl*>(RD)->hasDefinition() && static_cast<const CXXRecordDecl*>(RD)->getNumBases())
+	  {
+	  auto it = static_cast<const CXXRecordDecl*>(RD)->bases_begin();
+	  while (it != static_cast<const CXXRecordDecl*>(RD)->bases_end())
+	  {
+		  auto type = it->getType();
+		  CXXRecordDecl * childDecl = type.getTypePtr()->getAsCXXRecordDecl();
+		  if (childDecl)
+		  {
+			  std::cerr << " == Child: " << CGM.getCXXABI().GetClassMangledName(childDecl) << std::endl;
+		  }
+		  it++;
+	  }
+	  }
+	  
 	  Ty->setMangledName(name);
   }
 
