@@ -120,7 +120,7 @@ namespace llvm {
     void getArrayOffsets(Type *, StructElementInfoTy &, uint32_t);
     void insertUpdate(Module *, IRBuilder<> &, std::string, Value *,
                       StructElementInfoTy &, uint32_t , Value *,
-                      Value *, BasicBlock *);
+                      Value *, BasicBlock *, Type *);
     void insertRemove(Module *, IRBuilder<> &, std::string, Value *,
                       StructElementInfoTy &, Value *, int , BasicBlock *);
     bool isInterestingFn(Function *);
@@ -149,7 +149,7 @@ namespace llvm {
     void removeNonCastingRelatedObj(StructElementInfoTy &);
     void emitInstForObjTrace(Module *, IRBuilder<> &, StructElementInfoTy &,
                              uint32_t , Value *, Value *, uint32_t , uint32_t,
-                             uint32_t , Value *, BasicBlock *);
+                             uint32_t , Value *, BasicBlock *, Type *);
   };
 } // llvm namespace
 #endif  // LLVM_TRANSFORMS_UTILS_HEXTYPE_H

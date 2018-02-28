@@ -33,6 +33,7 @@ typedef struct ObjTypeMapEntry {
   uint64_t TypeHashValue;
   uint32_t HeapArraySize;
   int Offset;
+  uint32_t FakeVPointer;
   rbtree HexTree;
 } ObjTypeMapEntry;
 

@@ -114,7 +114,7 @@ namespace {
       Value *ObjAddrT = Builder.CreateIntToPtr(NewAddr,
                                                HexTypeUtilSet->IntptrTyN);
       HexTypeUtilSet->insertUpdate(&M, Builder, funName, ObjAddrT,
-                                   Elements, 0, NULL, NULL, NULL);
+                                   Elements, 0, NULL, NULL, NULL, NULL);
       if (ClMakeLogInfo) {
         Function *ObjUpdateFunction =
             //Paul: insert the object update count function
@@ -312,7 +312,7 @@ namespace {
                                          HexTypeUtilSet->DL.getTypeAllocSize(
                                            it->second), ArraySizeF,
                                          (Value *)(it->first->getArgOperand(0)),
-                                         NULL);
+                                         NULL, it->second);
 
           else
             //Paul: the same as above but for heap allocations
@@ -320,7 +320,7 @@ namespace {
                                          (Value *)(it->first), offsets,
                                          HexTypeUtilSet->DL.getTypeAllocSize(
                                            it->second), ArraySizeF,
-                                         NULL, NULL);
+                                         NULL, NULL, it->second);
         }
       }
     }

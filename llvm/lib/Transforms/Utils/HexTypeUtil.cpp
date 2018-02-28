@@ -847,7 +847,8 @@ namespace llvm {
                                             uint32_t CurrArrayIndex,
                                             uint32_t AllocType,
                                             Value *ReallocAddr,
-                                            BasicBlock* BasicBlock) {
+                                            BasicBlock* BasicBlock,
+                                            Type * AllocTypeLLVM) {
     if (ClCastObjOpt && (AllocType != PLACEMENTNEW) &&
         (AllocType != REINTERPRET)) {
       removeNonCastingRelatedObj(Elements);
@@ -864,8 +865,52 @@ namespace llvm {
     ConstantInt *constantTypeSize = dyn_cast<ConstantInt>(TypeSize);
 
     bool isFristEntry = true;
+    int k = -1;
+
+    std::vector<int> indexArray;
+
+    if (AllocType != NULL)
+    {
+	    StructType * type = dyn_cast<StructType>(AllocTypeLLVM);
+
+	    assert (type && "Obj for ObjTrace is not a Struct?");
+	    for (int i = 0; i < AllTypeNum; i++)
+	    {
+		    if (AllTypeInfo[i].StructTy == type)
+		    {
+			    k = i;
+			    break;
+		    }
+	    }
+    }
+    else
+    {
+	  for (auto & entry : Elements)
+	  {
+		  uint64_t TypeHashValueInt;
+		  if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
+			  TypeHashValueInt = entry.first;
+		  else
+			  TypeHashValueInt = getHashValueFromSTy(entry.second);
+		  
+		  for (int i = 0; i < AllTypeNum; i++)
+		  {
+			  if (AllTypeInfo[i].DetailInfo.TypeHashValue == TypeHashValueInt)
+			  {
+				  indexArray.push_back(i);
+				  k = i;
+				  break;
+			  }
+		  }
+		  break;
+	  }
+    }
+    assert (k != -1 && "Type not found in AllTypeInfo?");
+
+    std::cerr << "Insert Update for Type: " << AllTypeInfo[k].DetailInfo.TypeName << std::endl;
+
     for (auto &entry : Elements) {
-      uint32_t OffsetInt;
+	  uint32_t OffsetInt;
       if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
         OffsetInt = 0;
       else
@@ -882,6 +927,24 @@ namespace llvm {
         TypeHashValueInt = entry.first;
       else
         TypeHashValueInt = getHashValueFromSTy(entry.second);
+
+      uint32_t vpointer;
+
+      bool foundVPointer = false;
+      for (int i = 0; i < AllTypeNum; i++)
+      {
+	      if (AllTypeInfo[i].DetailInfo.TypeHashValue == TypeHashValueInt)
+	      {
+		      std::cerr << "Found Obj: " << AllTypeInfo[i].DetailInfo.TypeName << std::endl;
+		      vpointer = AllTypeInfo[i].FakeVPointers[0].second;
+		      foundVPointer = true;
+		      break;
+	      }
+      }
+
+      assert (foundVPointer && "VPointer missing");
+      
+      Value *FakeVPointer = ConstantInt::get(Int32Ty, vpointer);
       Value *TypeHashValue = ConstantInt::get(Int64Ty, TypeHashValueInt);
       Value *AllocTypeV = ConstantInt::get(Int32Ty, AllocType);
       Value *RuleAddr = nullptr;
@@ -962,15 +1025,19 @@ namespace llvm {
               Builder.CreateGEP(TargetIndexAddr, {ConstantInt::get(Int32Ty, 0),
                                 ConstantInt::get(Int32Ty, 4)}, "");
             Builder.CreateStore(OffsetV, TargetIndexAddrValueAddrT);
+            TargetIndexAddrValueAddrT =
+              Builder.CreateGEP(TargetIndexAddr, {ConstantInt::get(Int32Ty, 0),
+                                ConstantInt::get(Int32Ty, 5)}, "");
+            Builder.CreateStore(FakeVPointer, TargetIndexAddrValueAddrT);
 
             Builder.SetInsertPoint(ElseTerm);
             Function *initFunction =
               (Function*)SrcM->getOrInsertFunction(
                 //Paul: this function will call into the compiler-rt
                 "__update_direct_oinfo_inline", VoidTy,
-                IntptrTyN, Int64Ty, Int32Ty, IntptrTyN, Int64Ty, nullptr);
-            Value *Param[5] = {ObjAddrT, TypeHashValue, OffsetV,
-              RuleAddr, mapIndex64};
+                IntptrTyN, Int64Ty, Int32Ty, IntptrTyN, Int64Ty, Int32Ty, nullptr);
+            Value *Param[6] = {ObjAddrT, TypeHashValue, OffsetV,
+                               RuleAddr, mapIndex64, FakeVPointer};
             //Paul: insert the correspinding call
             Builder.CreateCall(initFunction, Param);
             Builder.SetInsertPoint(InsertPt);
@@ -982,12 +1049,12 @@ namespace llvm {
             else
               strcpy(TargetFn, "__update_direct_oinfo");
 
-            Value *Param[4] = {ObjAddrT, TypeHashValue, OffsetV, RuleAddr};
+            Value *Param[5] = {ObjAddrT, TypeHashValue, OffsetV, RuleAddr, FakeVPointer};
             Function *initFunction =
               //Paul: create the function, see above the two possible names
               (Function*)SrcM->getOrInsertFunction(TargetFn,
                                                    VoidTy, IntptrTyN, Int64Ty,
-                                                   Int32Ty, IntptrTyN, nullptr);
+                                                   Int32Ty, IntptrTyN, Int32Ty, nullptr);
             //Paul: insert the correspinding call
             Builder.CreateCall(initFunction, Param);
           }
@@ -1029,9 +1096,9 @@ namespace llvm {
             (Function*)SrcM->getOrInsertFunction("__update_oinfo",
                                                  VoidTy, IntptrTyN, Int64Ty,
                                                  Int32Ty, Int32Ty,
-                                                 Int64Ty, IntptrTyN, nullptr);
-          Value *ParamVLAADD[6] = {ObjAddrT, TypeHashValue, OffsetV,
-            TypeSize, ArraySize, RuleAddr};
+                                                 Int64Ty, IntptrTyN, Int32Ty, nullptr);
+          Value *ParamVLAADD[7] = {ObjAddrT, TypeHashValue, OffsetV,
+                                   TypeSize, ArraySize, RuleAddr, FakeVPointer};
           Builder.CreateCall(initFunction, ParamVLAADD);
           //Paul: object updaye count 
           if (ClMakeLogInfo) {
@@ -1152,32 +1219,32 @@ namespace llvm {
                                  std::string RuntimeFnName, Value *ObjAddr,
                                  StructElementInfoTy &Elements,
                                  uint32_t TypeSize, Value *ArraySize,
-                                 Value *ReallocAddr, BasicBlock *BasicBlock) {
+                                 Value *ReallocAddr, BasicBlock *BasicBlock, Type * AllocTypeLLVM) {
     uint32_t AllocType = getAllocType(RuntimeFnName);
     if (AllocType == REALLOC) 
       //Paul: object tracing when realloc was used
       emitInstForObjTrace(SrcM, Builder, Elements, VLAOBJADD,
                           ObjAddr,
                           ArraySize, TypeSize, 0,
-                          AllocType, ReallocAddr, BasicBlock);
+                          AllocType, ReallocAddr, BasicBlock, AllocTypeLLVM);
     else if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
       //Paul: object tracing when new() or reninterpret_cast() was used
       emitInstForObjTrace(SrcM, Builder, Elements, CONOBJADD,
                           ObjAddr, ArraySize, TypeSize, 0,
-                          AllocType, NULL, BasicBlock);
+                          AllocType, NULL, BasicBlock, AllocTypeLLVM);
     else if (dyn_cast<ConstantInt>(ArraySize) && AllocType != HEAPALLOC) {
       ConstantInt *constantSize = dyn_cast<ConstantInt>(ArraySize);
       for (uint32_t i=0; i<constantSize->getZExtValue(); i++)
         //Paul: trace object when heap alloc was used
         emitInstForObjTrace(SrcM, Builder, Elements, CONOBJADD,
                             ObjAddr, ArraySize, TypeSize, i,
-                            AllocType, NULL, BasicBlock);
+                            AllocType, NULL, BasicBlock, AllocTypeLLVM);
     }
     else
       emitInstForObjTrace(SrcM, Builder, Elements, VLAOBJADD,
                      ObjAddr,
                      ArraySize, TypeSize, 0,
-                     AllocType, NULL, BasicBlock);
+                     AllocType, NULL, BasicBlock, AllocTypeLLVM);
   }
   
   //Paul: insert remove functions
@@ -1199,13 +1266,13 @@ namespace llvm {
         //Paul: insert instruction for obj deletion, CONOBJDEL (DEL = delete)
         emitInstForObjTrace(SrcM, Builder, Elements, CONOBJDEL,
                             ObjAddr, ArraySize,
-                            TypeSize, i, AllocType, NULL, NULL);
+                            TypeSize, i, AllocType, NULL, NULL, NULL);
     }
     else
       //Paul: insert instruction for obj deletion, CONOBJDEL (DEL = delete)
       emitInstForObjTrace(SrcM, Builder, Elements, VLAOBJDEL,
                           ObjAddr, ArraySize, TypeSize, 0,
-                          AllocType, NULL, NULL);
+                          AllocType, NULL, NULL, NULL);
   }
 
   //Paul: strig manipulation function

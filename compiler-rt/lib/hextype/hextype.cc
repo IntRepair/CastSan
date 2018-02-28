@@ -54,6 +54,7 @@ __attribute__((always_inline))
     ObjTypeMapEntry *FindValue = findObjInfo(SrcAddr);
     if (!FindValue)
       return DstAddr;
+    printf("Found Obj cast info (early): %ld : %d\n", SrcAddr, FindValue->FakeVPointer);
 #ifdef HEX_LOG
     IncVal(numVerifiedCasting, 1);
 #endif
@@ -67,6 +68,7 @@ __attribute__((always_inline))
       if (offset < 0) {
         if (FindValue) {
           uint64_t SrcTypeHashValue = FindValue->TypeHashValue;
+          printf("Found Obj cast info negative offset: $ld %d\n", DstAddr, FindValue->FakeVPointer);
           if (SrcTypeHashValue == DstTypeHashValue) {
 #ifdef HEX_LOG
             IncVal(numCastSame, 1);
@@ -84,6 +86,10 @@ __attribute__((always_inline))
 #endif
         return nullptr;
       }
+      if (FindValue)
+      {
+	    printf("Found Obj cast info offset: %ld %d\n", DstAddr, FindValue->FakeVPointer);
+      }
       if (!FindValue) {
 #ifdef HEX_LOG
         IncVal(numCastBadCast, 1);
@@ -98,6 +104,7 @@ __attribute__((always_inline))
     }
 
     uint64_t SrcTypeHashValue = FindValue->TypeHashValue;
+    printf("Found Obj cast info: %ld : %d\n", SrcAddr, FindValue->FakeVPointer);
     uint64_t CacheIndex;
     CacheIndex = (SrcTypeHashValue & 0xfff);
     CacheIndex <<= 12;
@@ -383,7 +390,7 @@ void* __dynamic_casting_verification(uptr* const SrcAddr,
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
                            const int Offset,
-                           uptr* const RuleAddr) {
+                           uptr* const RuleAddr, const uint32_t FakeVPointer) {
   uptr MapIndex = getHash((uptr)AllocAddr);
   if (ObjTypeMap[MapIndex].ObjAddr == nullptr ||
       ObjTypeMap[MapIndex].ObjAddr == AllocAddr) {
@@ -392,6 +399,7 @@ void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
     ObjTypeMap[MapIndex].Offset = Offset;
     ObjTypeMap[MapIndex].HeapArraySize = 1;
     ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
+    ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
     return;
   }
 #ifdef HEX_LOG
@@ -411,6 +419,7 @@ void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
   ObjTypeMap[MapIndex].Offset = Offset;
   ObjTypeMap[MapIndex].HeapArraySize = 1;
   ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
+  ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
 }
 
 //Paul: update direct object information inlined
@@ -419,7 +428,7 @@ void __update_direct_oinfo_inline(uptr* const AllocAddr,
                                   const uint64_t TypeHashValue,
                                   const int Offset,
                                   uptr* RuleAddr,
-                                  const uint64_t MapIndex) {
+                                  const uint64_t MapIndex, const uint32_t FakeVPointer) {
 #ifdef HEX_LOG
   IncVal(numUpdateMiss, 1);
 #endif
@@ -439,6 +448,7 @@ void __update_direct_oinfo_inline(uptr* const AllocAddr,
   ObjTypeMap[MapIndex].Offset = Offset;
   ObjTypeMap[MapIndex].HeapArraySize = 1;
   ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
+  ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
 }
 
 //Paul: handle reinterpret cast function
@@ -446,7 +456,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __handle_reinterpret_cast(uptr* const AllocAddr,
                                const uint64_t TypeHashValue,
                                const int Offset,
-                               uptr* const RuleAddr) {
+                               uptr* const RuleAddr, const uint32_t FakeVPointer) {
   ObjTypeMapEntry *FindValue = findObjInfo(AllocAddr);
   if (FindValue) {
     if (FindValue->Offset != -1)
@@ -454,7 +464,7 @@ void __handle_reinterpret_cast(uptr* const AllocAddr,
     //  verifyTypeCasting(AllocAddr, AllocAddr, TypeHashValue);
   }
   //Paul: it calls this function located above.
-  __update_direct_oinfo(AllocAddr, TypeHashValue, -1, RuleAddr);
+  __update_direct_oinfo(AllocAddr, TypeHashValue, -1, RuleAddr, FakeVPointer);
 }
 
 //Paul: update object information.
@@ -462,10 +472,12 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
                     const int Offset,
                     const uint32_t TypeSize, const unsigned long ArraySize,
-                    uptr* const RuleAddr) {
+                    uptr* const RuleAddr, const uint32_t FakeVPointer) {
   for (uint32_t i=0;i<ArraySize;i++) {
     uptr *addr = (uptr *)((char *)AllocAddr + (TypeSize*i));
     uptr MapIndex = getHash((uptr)addr);
+
+    printf("Inserting Type info: %d, %d, %ld\n", i, FakeVPointer, addr);
 
     if (ObjTypeMap[MapIndex].ObjAddr == nullptr ||
         ObjTypeMap[MapIndex].ObjAddr == addr) {
@@ -474,6 +486,7 @@ void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
       ObjTypeMap[MapIndex].Offset = Offset;
       ObjTypeMap[MapIndex].HeapArraySize  = ArraySize;
       ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
+      ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
       continue;
     }
 

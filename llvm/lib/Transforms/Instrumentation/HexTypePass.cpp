@@ -177,7 +177,7 @@ namespace {
                                          AI, offsets,
                                          HexTypeUtilSet->DL.getTypeAllocSize(
                                            AllocaType),
-                                         ArraySizeF, NULL, NULL);
+                                         ArraySizeF, NULL, NULL, AllocaType);
             UseLifeTimeInfo = true;
           }
 
@@ -188,7 +188,7 @@ namespace {
                                      AI, offsets,
                                      HexTypeUtilSet->DL.getTypeAllocSize(
                                        AllocaType),
-                                     ArraySizeF, NULL, NULL);
+                                     ArraySizeF, NULL, NULL, AllocaType);
       }
     }
     
@@ -397,7 +397,7 @@ namespace {
                                        "__update_global_oinfo",
                                        &GV, offsets, HexTypeUtilSet->DL.
                                        getTypeAllocSize(AllocaType),
-                                       NElems, NULL, BBGlobal);
+                                       NElems, NULL, BBGlobal, AllocaType);
         }
       }
       BuilderGlobal.CreateRetVoid();
