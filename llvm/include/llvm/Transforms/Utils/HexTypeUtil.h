@@ -12,6 +12,7 @@
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/CastSanUtil.h"
 #include <algorithm>
 #include <set>
 #include <list>
@@ -106,6 +107,8 @@ namespace llvm {
     std::vector<uint64_t> typeInfoArrayInt;
     std::set<std::string> CastingRelatedSet;
     std::set<std::string> CastingRelatedExtendSet;
+
+    CastSanUtil CastSan;
 
     GlobalVariable *typeInfoArrayGlobal;
     GlobalVariable *typePhantomInfoArrayGlobal;

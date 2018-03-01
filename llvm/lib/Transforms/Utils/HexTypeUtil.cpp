@@ -18,6 +18,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/HexTypeUtil.h"
+#include "llvm/Transforms/Utils/CastSanUtil.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include <sys/types.h>
@@ -285,6 +286,8 @@ namespace llvm {
     }
 
     getTypeInfoFromClang();
+
+    CastSan.getTypeMetadata(M);
   }
 
   bool HexTypeLLVMUtil::isInterestingFn(Function *F) {
