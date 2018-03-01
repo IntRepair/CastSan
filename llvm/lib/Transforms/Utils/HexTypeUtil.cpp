@@ -288,6 +288,7 @@ namespace llvm {
     getTypeInfoFromClang();
 
     CastSan.getTypeMetadata(M);
+    CastSan.buildFakeVTables();
   }
 
   bool HexTypeLLVMUtil::isInterestingFn(Function *F) {
@@ -872,11 +873,9 @@ namespace llvm {
 
     std::vector<int> indexArray;
 
-    if (AllocType != NULL)
+    StructType * type = dyn_cast_or_null<StructType>(AllocTypeLLVM);
+    if (AllocType != NULL && type)
     {
-	    StructType * type = dyn_cast<StructType>(AllocTypeLLVM);
-
-	    assert (type && "Obj for ObjTrace is not a Struct?");
 	    for (int i = 0; i < AllTypeNum; i++)
 	    {
 		    if (AllTypeInfo[i].StructTy == type)
@@ -888,6 +887,7 @@ namespace llvm {
     }
     else
     {
+	  assert (AllocType && "Obj for ObjTrace is not a Struct?");
 	  for (auto & entry : Elements)
 	  {
 		  uint64_t TypeHashValueInt;
