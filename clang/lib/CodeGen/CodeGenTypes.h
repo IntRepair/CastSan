@@ -330,7 +330,13 @@ public:
   /// optional suffix and name the given LLVM type using it.
   void addRecordTypeName(const RecordDecl *RD, llvm::StructType *Ty,
                          StringRef suffix);
-  
+
+  void CastSanCreateTypeMD(const CXXRecordDecl * ClassDecl,
+                           std::string TypeName);
+
+  void CastSanInsertTypeMD(std::string TyMangledName,
+                           uint64_t TyHashValue,
+                           std::vector<uint64_t> TyParents);
 
 public:  // These are internal details of CGT that shouldn't be used externally.
   /// ConvertRecordDeclType - Lay out a tagged decl type like struct or union.

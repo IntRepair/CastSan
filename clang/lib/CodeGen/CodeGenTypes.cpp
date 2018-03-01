@@ -26,6 +26,9 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Transforms/Utils/HexTypeUtil.h"
+#include "llvm/Transforms/Utils/CastSanUtil.h"
+#include "llvm/Transforms/IPO/CastSanVtblMD.h"
 using namespace clang;
 using namespace CodeGen;
 
@@ -98,29 +101,71 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
 
   Ty->setName(OS.str());
 
- if (isa<CXXRecordDecl>(RD))
+  if (isa<CXXRecordDecl>(RD))
   {
-	  auto name = CGM.getCXXABI().GetClassMangledName(static_cast<const CXXRecordDecl*>(RD));
-	  std::cerr << " ========== Got Type: " << name << std::endl;
+    const CXXRecordDecl * ClassDecl = static_cast<const CXXRecordDecl*>(RD);
+    if (ClassDecl->isCompleteDefinition() &&
+        ClassDecl->hasDefinition() &&
+        !ClassDecl->isAnonymousStructOrUnion())
+    {
+      std::string Name = OS.str();
+      CastSanCreateTypeMD(ClassDecl, Name);
+    }
+  }
+}
 
-	  if (static_cast<const CXXRecordDecl*>(RD)->hasDefinition() && static_cast<const CXXRecordDecl*>(RD)->getNumBases())
-	  {
-	  auto it = static_cast<const CXXRecordDecl*>(RD)->bases_begin();
-	  while (it != static_cast<const CXXRecordDecl*>(RD)->bases_end())
-	  {
-		  auto type = it->getType();
-		  CXXRecordDecl * childDecl = type.getTypePtr()->getAsCXXRecordDecl();
-		  if (childDecl)
-		  {
-			  std::cerr << " == Child: " << CGM.getCXXABI().GetClassMangledName(childDecl) << std::endl;
-		  }
-		  it++;
-	  }
-	  }
-	  
-	  Ty->setMangledName(name);
+void CodeGenTypes::CastSanCreateTypeMD(const CXXRecordDecl * ClassDecl,
+                                       std::string TyName) {
+  llvm::HexTypeCommonUtil HexTypeUtil;
+
+  std::string TyMangledName = CGM.getCXXABI().GetClassMangledName(ClassDecl);
+  uint64_t TyHashValue = HexTypeUtil.getHashValueFromStr(TyName);
+  std::vector<uint64_t> TyParents;
+    
+  auto it = ClassDecl->bases_begin();
+  while (it != ClassDecl->bases_end())
+  {
+    auto ParentType = it->getType();
+    CXXRecordDecl * ParentClassDecl = ParentType.getTypePtr()->getAsCXXRecordDecl();
+        
+    if (ParentClassDecl)
+    {
+      std::string ParentNameStr = getCGRecordLayout(ParentClassDecl).getLLVMType()->getName();
+      uint64_t ParentHashValue = HexTypeUtil.getHashValueFromStr(ParentNameStr);
+      TyParents.push_back(ParentHashValue);
+    }
+    it++;
   }
 
+  CastSanInsertTypeMD(TyMangledName, TyHashValue, TyParents);
+}
+
+void CodeGenTypes::CastSanInsertTypeMD(std::string TyMangledName,
+                                       uint64_t TyHashValue,
+                                       std::vector<uint64_t> TyParents)
+{
+	llvm::Module & M = CGM.getModule();
+	llvm::LLVMContext & C = CGM.getLLVMContext();
+	llvm::NamedMDNode * TyInfoMD = M.getOrInsertNamedMetadata(CS_MD_TYPEINFO + TyMangledName);
+
+	// Type is already inserted
+	if (TyInfoMD->getNumOperands() > 0)
+		return;
+
+	std::cerr << "Inserting Class " << TyMangledName << " with " << TyParents.size() << " parents" << std::endl;
+
+	// Mangled Name for identification with IVT Metadata
+	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDString(C, TyMangledName)));
+	
+	// Hash for identification with HexType Metadata (llvm::StructType)
+	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDNumber(C, TyHashValue)));
+
+	// Parent Count for correct reading of Metadata in LLVM
+	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDNumber(C, TyParents.size())));
+	
+	// Each parent as one operand
+	for (auto & parent : TyParents)
+		TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDNumber(C, parent)));
 }
 
 /// ConvertTypeForMem - Convert type T into a llvm::Type.  This differs from
