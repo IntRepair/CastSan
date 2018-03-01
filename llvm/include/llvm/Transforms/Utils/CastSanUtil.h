@@ -24,6 +24,7 @@ namespace llvm {
 		uint64_t TypeHash;
 		
 		std::vector<uint64_t> ParentHashes;
+		std::vector<uint64_t> ChildHashes;
 		std::vector<CHTreeNode*> Parents;
 		std::vector<CHTreeNode*> Children;
 		std::vector<TreeIndex> TreeIndices; // FakeVPointer
@@ -31,12 +32,20 @@ namespace llvm {
 	};
 	
 	class CastSanUtil {
+	private:
+		void extendTypeMetadata();
+		void findDiamonds();
+		void findDiamondsRecursive(std::vector<CHTreeNode*> & descendents, CHTreeNode * Type);
+		void setParentsChildrenRecursive(CHTreeNode * Type);
+		uint64_t buildFakeVTablesRecursive(CHTreeNode * Root, uint64_t Index, CHTreeNode * Type);
 	public:
 		std::map<uint64_t, CHTreeNode> Types;
 		std::vector<CHTreeNode*> Roots;
 
 		void getTypeMetadata(Module & M);
-		uint64_t getUInt64MD(const MDOperand & op);
+		void buildFakeVTables();
+
+		static uint64_t getUInt64MD(const MDOperand & op);
 	};
 }
 
