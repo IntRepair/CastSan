@@ -36,8 +36,6 @@ namespace llvm {
 				Roots.push_back(&Type);
 			}
 
-			std::cerr << "Got MD Type: " << Type.MangledName << " Parents: ";
-
 			for (uint64_t i = 0; i < ParentsNum; i++)
 			{
 				uint64_t ParentHash = getUInt64MD(MdIt->getOperand(3 + i)->getOperand(0));
@@ -111,13 +109,11 @@ namespace llvm {
 		for (CHTreeNode * Root : Roots)
 		{
 			std::cerr << std::endl;
-			std::cerr << "VTable: " << Root->MangledName << std::endl; 
 			Index = buildFakeVTablesRecursive(Root, Index, Root);
 		}
 	}
 
 	uint64_t CastSanUtil::buildFakeVTablesRecursive(CHTreeNode * Root, uint64_t Index, CHTreeNode * Type) {
-		std::cerr << "Entry: " << Type->MangledName << "; Index " << Index << std::endl;
 		Type->TreeIndices.push_back(std::make_pair(Root, Index));
 		Index++;
 
@@ -139,5 +135,33 @@ namespace llvm {
 		assert(cint && "Metdata has no Int Value");
 
 		return cint->getSExtValue();
+	}
+
+	uint64_t CastSanUtil::getFakeVPointer(CHTreeNode * Type, uint64_t ElementHash)
+	{
+		CHTreeNode * Root;
+		if (Type->TypeHash == ElementHash)
+		{
+			Root = Type;
+			while (Root->Parents.size())
+				Root = Root->Parents[0];
+
+		}
+		else
+		{
+			for (CHTreeNode * Parent : Type->Parents)
+				if (Parent->TypeHash == ElementHash)
+				{
+					Root = Parent;
+					break;
+				}
+		}
+		    
+		if (Root)
+			for (CHTreeNode::TreeIndex & Index : Type->TreeIndices)
+				if (Index.first == Root)
+					return Index.second;
+
+		return -1;
 	}
 }

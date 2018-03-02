@@ -44,6 +44,7 @@ namespace llvm {
 
 		void getTypeMetadata(Module & M);
 		void buildFakeVTables();
+		uint64_t getFakeVPointer(CHTreeNode * Type, uint64_t ElementHash);
 
 		static uint64_t getUInt64MD(const MDOperand & op);
 	};

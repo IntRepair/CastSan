@@ -872,22 +872,23 @@ namespace llvm {
     int k = -1;
 
     std::vector<int> indexArray;
+    uint64_t TypeHash;
 
     StructType * type = dyn_cast_or_null<StructType>(AllocTypeLLVM);
-    if (AllocType != NULL && type)
+    if (type)
     {
 	    for (int i = 0; i < AllTypeNum; i++)
 	    {
 		    if (AllTypeInfo[i].StructTy == type)
 		    {
 			    k = i;
+			    TypeHash = AllTypeInfo[i].DetailInfo.TypeHashValue;
 			    break;
 		    }
 	    }
     }
     else
     {
-	  assert (AllocType && "Obj for ObjTrace is not a Struct?");
 	  for (auto & entry : Elements)
 	  {
 		  uint64_t TypeHashValueInt;
@@ -902,6 +903,7 @@ namespace llvm {
 			  {
 				  indexArray.push_back(i);
 				  k = i;
+				  TypeHash = AllTypeInfo[i].DetailInfo.TypeHashValue;
 				  break;
 			  }
 		  }
@@ -909,6 +911,8 @@ namespace llvm {
 	  }
     }
     assert (k != -1 && "Type not found in AllTypeInfo?");
+
+    CHTreeNode & VType = CastSan.Types[TypeHash];
 
     std::cerr << "Insert Update for Type: " << AllTypeInfo[k].DetailInfo.TypeName << std::endl;
 
@@ -918,12 +922,6 @@ namespace llvm {
         OffsetInt = 0;
       else
         OffsetInt = entry.first;
-      Value *OffsetV = ConstantInt::get(Int32Ty, OffsetInt);
-      OffsetInt += (constantTypeSize->getZExtValue() * CurrArrayIndex);
-      Value *first = ConstantInt::get(IntptrTyN, OffsetInt);
-      Value *second = Builder.CreatePtrToInt(ObjAddr, IntptrTyN);
-      Value *NewAddr = Builder.CreateAdd(first, second);
-      Value *ObjAddrT = Builder.CreateIntToPtr(NewAddr, IntptrTyN);
 
       uint64_t TypeHashValueInt;
       if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
@@ -932,20 +930,19 @@ namespace llvm {
         TypeHashValueInt = getHashValueFromSTy(entry.second);
 
       uint32_t vpointer;
+      vpointer = CastSan.getFakeVPointer(&VType, TypeHashValueInt);
 
-      bool foundVPointer = false;
-      for (int i = 0; i < AllTypeNum; i++)
-      {
-	      if (AllTypeInfo[i].DetailInfo.TypeHashValue == TypeHashValueInt)
-	      {
-		      std::cerr << "Found Obj: " << AllTypeInfo[i].DetailInfo.TypeName << std::endl;
-		      vpointer = AllTypeInfo[i].FakeVPointers[0].second;
-		      foundVPointer = true;
-		      break;
-	      }
-      }
+      if (vpointer == -1)
+	      continue;
 
-      assert (foundVPointer && "VPointer missing");
+      std::cerr << "Insert Element" << CastSan.Types[TypeHashValueInt].MangledName << " of " << VType.MangledName << ", " << TypeHashValueInt << " with vpointer " << vpointer << std::endl;
+	      
+      Value *OffsetV = ConstantInt::get(Int32Ty, OffsetInt);
+      OffsetInt += (constantTypeSize->getZExtValue() * CurrArrayIndex);
+      Value *first = ConstantInt::get(IntptrTyN, OffsetInt);
+      Value *second = Builder.CreatePtrToInt(ObjAddr, IntptrTyN);
+      Value *NewAddr = Builder.CreateAdd(first, second);
+      Value *ObjAddrT = Builder.CreateIntToPtr(NewAddr, IntptrTyN);
       
       Value *FakeVPointer = ConstantInt::get(Int32Ty, vpointer);
       Value *TypeHashValue = ConstantInt::get(Int64Ty, TypeHashValueInt);
