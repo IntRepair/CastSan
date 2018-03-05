@@ -2546,16 +2546,18 @@ has a counterpart function in the compiler-rt.
 Types may change.
 */
 void CodeGenFunction::EmitHexTypeCheckForchangingCast(QualType T,
+                                                      QualType PT,
                                                       llvm::Value *Base,
                                                       llvm::Value *Derived,
                                                       bool MayBeNull,
                                                       CFITypeCheckKind TCK,
                                                       SourceLocation Loc) {
-  if (llvm::Value *DstTyHashValue = getHashValueFromQualType(T)) {
-    llvm::Value *DynamicArgs[] = { Base, Derived };
-    HexEmitCheck("__type_casting_verification_changing", DynamicArgs,
-                 DstTyHashValue);
-  }
+  if (llvm::Value *DstTyHashValue = getHashValueFromQualType(T))
+    if (llvm::Value *PointerTyHashValue = getHashValueFromQualType(PT)) {
+      llvm::Value *DynamicArgs[] = { Base, Derived };
+      HexEmitCheck("__type_casting_verification_changing", DynamicArgs,
+                   DstTyHashValue, PointerTyHashValue);
+    }
 }
 
 /**
@@ -2564,14 +2566,16 @@ has a counterpart function in the compiler-rt.
 Types may not change.
 */
 void CodeGenFunction::EmitHexTypeCheckForCast(QualType T,
+                                              QualType PT,
                                               llvm::Value *Derived,
                                               bool MayBeNull,
                                               CFITypeCheckKind TCK,
                                               SourceLocation Loc) {
-  if (llvm::Value *DstTyHashValue = getHashValueFromQualType(T)) {
-    llvm::Value *DynamicArgs[] = { Derived };
-    HexEmitCheck("__type_casting_verification", DynamicArgs, DstTyHashValue);
-  }
+  if (llvm::Value *DstTyHashValue = getHashValueFromQualType(T))
+    if (llvm::Value *PointerTyHashValue = getHashValueFromQualType(PT)) {
+      llvm::Value *DynamicArgs[] = { Derived };
+      HexEmitCheck("__type_casting_verification", DynamicArgs, DstTyHashValue, PointerTyHashValue);
+    }
 }
 
 void CodeGenFunction::EmitVTablePtrCheckForCast(QualType T,

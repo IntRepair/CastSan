@@ -3089,13 +3089,13 @@ public:
   
   //Paul: create the check.
   void HexEmitCheck(StringRef FunName, ArrayRef<llvm::Value *> DynamicArgs,
-                    llvm::Value *DstTyHashValue);
+                    llvm::Value *DstTyHashValue, llvm::Value *PointerTyValue);
   //Paul: static cast check
-  void EmitHexTypeCheckForCast(QualType T, llvm::Value *Derived,
+  void EmitHexTypeCheckForCast(QualType T, QualType PT, llvm::Value *Derived,
                                bool MayBeNull, CFITypeCheckKind TCK,
                                SourceLocation Loc);
   //Paul: changing (polymorphic check)
-  void EmitHexTypeCheckForchangingCast(QualType T, llvm::Value *Base,
+  void EmitHexTypeCheckForchangingCast(QualType T, QualType PT, llvm::Value *Base,
                                        llvm::Value *Derived,
                                        bool MayBeNull, CFITypeCheckKind TCK,
                                        SourceLocation Loc);

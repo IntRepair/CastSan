@@ -40,11 +40,8 @@ namespace llvm {
 			{
 				uint64_t ParentHash = getUInt64MD(MdIt->getOperand(3 + i)->getOperand(0));
 				Type.ParentHashes.push_back(ParentHash);
-
-				std::cerr << ParentHash << ", ";
 			}
 
-			std::cerr << std::endl;
 		}
 
 		extendTypeMetadata();
@@ -93,12 +90,74 @@ namespace llvm {
 				if (Desc->TypeHash == Child->TypeHash)
 				{
 					Roots.push_back(Type);
-					Type->DiamondRootInTree.push_back(Descendents[0]);
+					Type->DiamondRootInTreeWithChild.push_back(std::make_pair(Descendents[0], Child));
 					return;
 				}
 			}
 			Descendents.push_back(Child);
 			findDiamondsRecursive(Descendents, Child);
+		}
+	}
+
+	bool CastSanUtil::isSubtreeInTree(CHTreeNode * subtree, CHTreeNode * tree, CHTreeNode * root) {
+		if (!root)
+			root = tree;
+			 
+		for (auto Child : tree->Children)
+		{
+			if (Child == subtree)
+			{
+				assert (Child->Children.size() && "Subtree is node without children.");
+
+				for (auto GrandChild : subtree->Children)
+				{
+					if (GrandChild->TreeIndices.count(root) && GrandChild->TreeIndices.count(subtree))
+					{
+						for (auto & node : subtree->DiamondRootInTreeWithChild)
+							if (node.first != root || node.second != GrandChild)
+								return true;
+					}
+				}
+			} else {
+				if (isSubtreeInTree(subtree, Child, root))
+					return true;
+			}
+		}
+		return false;
+	}
+
+	void removeTreeIndicesForRoot(CHTreeNode * cur, CHTreeNode * root = nullptr) {
+		if (!root)
+			root = cur;
+		
+		cur->TreeIndices.erase(root);
+		for (auto child : cur->Children)
+			removeTreeIndicesForRoot(child, root);
+	}
+
+	void CastSanUtil::removeDuplicates() {
+		for (int i = 0; i < Roots.size();)
+		{
+			bool del = false;
+			for (int k = 0; k < Roots.size(); k++)
+			{
+				if (i != k)
+				{
+					assert(Roots[i] != Roots[k] && "Duplicate Root in CastSan MD");
+
+					if (isSubtreeInTree(Roots[i], Roots[k]))
+					{
+						del = true;
+
+						removeTreeIndicesForRoot(Roots[i]);
+						Roots.erase(Roots.begin() + i);
+
+						break;
+					}
+				}
+			}
+			if (!del)
+				i++;
 		}
 	}
 
@@ -108,21 +167,42 @@ namespace llvm {
 		uint64_t Index = 0;
 		for (CHTreeNode * Root : Roots)
 		{
-			std::cerr << std::endl;
 			Index = buildFakeVTablesRecursive(Root, Index, Root);
 		}
+
+		removeDuplicates();
 	}
 
 	uint64_t CastSanUtil::buildFakeVTablesRecursive(CHTreeNode * Root, uint64_t Index, CHTreeNode * Type) {
-		Type->TreeIndices.push_back(std::make_pair(Root, Index));
+		Type->TreeIndices[Root] = Index;
+
 		Index++;
 
-		for (CHTreeNode * Node : Type->DiamondRootInTree)
-			if (Node == Root)
-				return Index; // stop here because of diamond
-
 		for (CHTreeNode * Child : Type->Children)
-			Index = buildFakeVTablesRecursive(Root, Index, Child);
+		{
+			for (auto & Node : Type->DiamondRootInTreeWithChild)
+				if (Node.first == Root && Node.second == Child)
+					continue; // stop here because of diamond
+
+			if (!Type->DiamondRootInTreeWithChild.size())
+				Index = buildFakeVTablesRecursive(Root, Index, Child);
+			else if (Type == Root)
+			{
+				for (auto & Node : Type->DiamondRootInTreeWithChild)
+					if (Node.second == Child)
+						Index = buildFakeVTablesRecursive(Root, Index, Child);
+			}
+			else
+			{
+				bool isDiamondInheritance = false;
+				for (auto & Node : Type->DiamondRootInTreeWithChild)
+					if (Node.first == Root && Node.second == Child)
+						isDiamondInheritance = true;
+
+				if (!isDiamondInheritance)
+					Index = buildFakeVTablesRecursive(Root, Index, Child);
+			}
+		}
 
 		return Index;
 	}
@@ -137,9 +217,64 @@ namespace llvm {
 		return cint->getSExtValue();
 	}
 
-	uint64_t CastSanUtil::getFakeVPointer(CHTreeNode * Type, uint64_t ElementHash)
+	uint64_t CastSanUtil::getRangeWidth(CHTreeNode * Start, CHTreeNode * Root) {
+		uint64_t width = 1;
+
+		for (auto Child : Start->Children) {
+			for (auto & Node : Start->DiamondRootInTreeWithChild)
+				if (Node.first == Root && Node.second == Child)
+					continue;
+
+			bool isInRoot = false;
+			for (auto & Index : Child->TreeIndices)
+				if (Index.first == Root)
+					isInRoot = true;
+
+			if (isInRoot)
+				width += getRangeWidth(Child, Root);
+		}
+		return width;
+	}
+
+	CHTreeNode * CastSanUtil::getRootForCast(CHTreeNode * P, CHTreeNode * C, CHTreeNode * Root) {
+		if (!Root) {
+			for (CHTreeNode::TreeIndex & Index : C->TreeIndices) {
+				CHTreeNode * RootTry = getRootForCast(P, C, Index.first);
+				if (RootTry)
+					return RootTry;
+			}
+
+			return nullptr;
+		}
+
+		for (CHTreeNode * Parent : C->Parents) {
+			bool isDiamondParent = false;
+			for (auto & Node : Parent->DiamondRootInTreeWithChild)
+				if (Node.first == Root && Node.second == C)
+					isDiamondParent = true;
+
+			if (isDiamondParent)
+				continue;
+			
+			for (CHTreeNode::TreeIndex & Index : Parent->TreeIndices)
+			{
+				if (Index.first == Root)
+				{
+					if (Parent == P)
+						return Root;
+					CHTreeNode * ParentRoot = getRootForCast(P, Parent, Root);
+					if (ParentRoot)
+						return ParentRoot;
+				}
+			}
+		}
+
+		return nullptr;
+	}
+
+	std::pair<CHTreeNode*,uint64_t> CastSanUtil::getFakeVPointer(CHTreeNode * Type, uint64_t ElementHash)
 	{
-		CHTreeNode * Root;
+		CHTreeNode * Root = nullptr;
 		if (Type->TypeHash == ElementHash)
 		{
 			Root = Type;
@@ -155,13 +290,24 @@ namespace llvm {
 					Root = Parent;
 					break;
 				}
+
+			if (!Root)
+				for (CHTreeNode * Parent : Type->Parents)
+				{
+					auto pvp = getFakeVPointer(Parent, ElementHash);
+					if (pvp.first)
+					{
+						Root = pvp.first;
+						break;
+					}
+				}
 		}
 		    
 		if (Root)
 			for (CHTreeNode::TreeIndex & Index : Type->TreeIndices)
 				if (Index.first == Root)
-					return Index.second;
+					return std::make_pair(Root, Index.second);
 
-		return -1;
+		return std::make_pair(nullptr, -1);
 	}
 }

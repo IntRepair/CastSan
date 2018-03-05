@@ -2517,22 +2517,31 @@ Paul: generic function for emiting a check.
 See EmitNounwindRuntimeCall*/
 void CodeGenFunction::HexEmitCheck(StringRef FunName,
                                    ArrayRef<llvm::Value *> DynamicArgs,
-                                   llvm::Value *DstTyHashValue) {
+                                   llvm::Value *DstTyHashValue,
+                                   llvm::Value *PointerTyHashValue) {
   bool blacklisted =
     CGM.getContext().getSanitizerBlacklist().isBlacklistedFunction(
       CurFn->getName()) ? 1 : 0;
   if (blacklisted) return;
 
-  SmallVector<llvm::Value *, 4> Args;
-  SmallVector<llvm::Type *, 4> ArgTypes;
-  Args.reserve(DynamicArgs.size() + 1);
-  ArgTypes.reserve(DynamicArgs.size() + 1);
+  SmallVector<llvm::Value *, 6> Args;
+  SmallVector<llvm::Type *, 6> ArgTypes;
+  Args.reserve(DynamicArgs.size() + 4);
+  ArgTypes.reserve(DynamicArgs.size() + 4);
 
   for (size_t i = 0, n = DynamicArgs.size(); i != n; ++i) {
     Args.push_back(EmitCheckValue(DynamicArgs[i]));
     ArgTypes.push_back(IntPtrTy);
   }
   Args.push_back(DstTyHashValue);
+  ArgTypes.push_back(Builder.getInt64Ty());
+
+  Args.push_back(PointerTyHashValue);
+  ArgTypes.push_back(Builder.getInt64Ty());
+
+  llvm::Value * const_null = llvm::ConstantInt::getNullValue(Builder.getInt64Ty());
+
+  Args.push_back(const_null);
   ArgTypes.push_back(Builder.getInt64Ty());
 
   llvm::FunctionType *FnType =
@@ -2545,6 +2554,15 @@ void CodeGenFunction::HexEmitCheck(StringRef FunName,
     FnType, FunName,
     llvm::AttributeSet::get(getLLVMContext(),
                             llvm::AttributeSet::FunctionIndex, B));
+  
+
+  /*llvm::Value * CheckIntrinsic;
+  if (DynamicArgs.size() == 1)
+	  CheckIntrinsic = Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::cast_san_check), {EmitCheckValue(DynamicArgs[0]), DstTyHashValue, PointerTyHashValue});
+  else if (DynamicArgs.size() == 2)
+	  CheckIntrinsic = Builder.CreateCall(CGM.getIntrinsic(llvm::Intrinsic::cast_san_check_changing), {EmitCheckValue(DynamicArgs[0]),EmitCheckValue(DynamicArgs[1]), DstTyHashValue, PointerTyHashValue});
+  else
+  assert (false && "Unexpected: more than 2 args to cast");*/
 
   EmitNounwindRuntimeCall(Fn, Args);
 }
@@ -3736,9 +3754,9 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   case CK_BaseToDerived: {
     const RecordType *DerivedClassTy = E->getType()->getAs<RecordType>();
     auto *DerivedClassDecl = cast<CXXRecordDecl>(DerivedClassTy->getDecl());
-    const CXXRecordDecl *BaseClassDecl = cast<CXXRecordDecl>(E->getType()->getAs<RecordType>()->getDecl());
     
     LValue LV = EmitLValue(E->getSubExpr());
+    const CXXRecordDecl *BaseClassDecl = cast<CXXRecordDecl>(LV.getType()->getAs<RecordType>()->getDecl());
 
     // Perform the base-to-derived conversion
     Address Derived =
@@ -3771,18 +3789,26 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
         CGM.GetNonVirtualBaseClassOffset(DerivedClassDecl,
                                          E->path_begin(), E->path_end());
       if (!NonVirtualOffset)
+      {
+        std::cerr << "Non-Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << std::endl;
         EmitHexTypeCheckForCast(E->getType(),
+                                LV.getType(),
                                 LV.getAddress().getPointer(),
                                 /*MayBeNull=*/false,
                                 CFITCK_DerivedCast,
                                 E->getLocStart());
+      }
       else
+      {
+	      std::cerr << " -------- Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << " ---------" << std::endl;
         EmitHexTypeCheckForchangingCast(E->getType(),
+                                        LV.getType(),
                                         LV.getAddress().getPointer(),
                                         Derived.getPointer(),
                                         /*MayBeNull=*/false,
                                         CFITCK_DerivedCast,
                                         E->getLocStart());
+      }
     }
 
     if (SanOpts.has(SanitizerKind::CFIDerivedCast))

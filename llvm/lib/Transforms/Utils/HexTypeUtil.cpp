@@ -269,7 +269,6 @@ namespace llvm {
     std::vector<StructType*> Types = M.getIdentifiedStructTypes();
     for (StructType *ST : Types) {
       TypeInfo NewType;
-      std::cerr << "New Type: " << ST->getName().data() << std::endl;
       if (!HexTypeCommonUtil::isInterestingStructType(ST))
         continue;
 
@@ -386,43 +385,6 @@ namespace llvm {
     return start;
   }
 
-  void HexTypeLLVMUtil::findDiamonds(std::vector<int> & childs, int cur) {
-    for (int i = 0; i < AllTypeInfo[cur].DirectChildren.size(); i++)
-    {
-      for (int k = 0; k < childs.size(); k++)
-      {
-        if (childs[k] == AllTypeInfo[cur].DirectChildren[i])
-        {
-          if (!AllTypeInfo[cur].isRoot)
-          {
-	        std::cerr << std::endl << " -- Diamond Detected: Type " << AllTypeInfo[cur].DetailInfo.TypeName << " is a diamond root in tree " << AllTypeInfo[childs[0]].DetailInfo.TypeName << std::endl;
-	        std::cerr << "Childs: ";
-	        for (int z = 0; z < childs.size(); z++)
-	        {
-		        std::cerr << AllTypeInfo[childs[z]].DetailInfo.TypeName << ", ";
-	        }
-	        std::cerr << std::endl;
-
-	        std::cerr << "Childs of " << AllTypeInfo[cur].DetailInfo.TypeName << ": ";
-	        for (int z = 0; z < AllTypeInfo[cur].DirectChildren.size(); z++)
-		        std::cerr << AllTypeInfo[AllTypeInfo[cur].DirectChildren[z]].DetailInfo.TypeName << ", ";
-	        std::cerr << std::endl;
-            AllTypeInfo[cur].isRoot = true;
-            AllTypeInfo[cur].DiamondRootInTree.push_back(childs[0]);
-            std::vector<int> newChilds = { cur };
-            std::cerr << " Finding Diamonds " << AllTypeInfo[cur].DetailInfo.TypeName << ": ";
-            findDiamonds(newChilds, cur);
-            std::cerr << std::endl;
-            return;
-          }
-        }
-      }
-      childs.push_back(AllTypeInfo[cur].DirectChildren[i]);
-      std::cerr << AllTypeInfo[AllTypeInfo[cur].DirectChildren[i]].DetailInfo.TypeName << ", ";
-      findDiamonds(childs, AllTypeInfo[cur].DirectChildren[i]);
-    }
-  }
-
   void HexTypeLLVMUtil::extendTypeRelationInfo() {
     for (uint32_t i=0;i<AllTypeNum;i++)
     {
@@ -445,7 +407,6 @@ namespace llvm {
             if (!knownChild)
             {
               AllTypeInfo[t].DirectChildren.push_back(i);
-              std::cerr << AllTypeInfo[i].DetailInfo.TypeName << " is a child of " << AllTypeInfo[t].DetailInfo.TypeName << std::endl;
             }
 
             if (DL.getTypeAllocSize(AllTypeInfo[i].StructTy) ==
@@ -458,40 +419,13 @@ namespace llvm {
             }
           }
     }
-
-    for (uint32_t i=0;i<AllTypeNum;i++)
-    {
-      if (AllTypeInfo[i].isRoot)
-      {
-        std::vector<int> children = { (int)i };
-        std::cerr << " Finding Diamonds " << AllTypeInfo[i].DetailInfo.TypeName << ": ";
-        findDiamonds(children, i);
-        std::cerr << std::endl;
-      }
-    }
     
-    int count = 0;
-    for (uint32_t i=0;i<AllTypeNum;i++)
-      if (AllTypeInfo[i].isRoot)
-      
-        count = buildFakeVTables(count, i, i);
-
     for (uint32_t i=0;i<AllTypeNum;i++) {
       std::fill_n(VisitCheck, AllTypeNum, false);
       extendParentSet(i, i);
 
       std::fill_n(VisitCheck, AllTypeNum, false);
       extendPhantomSet(i, i);
-    }
-    
-    for (uint32_t i=0;i<AllTypeNum;i++)
-    {
-        std::cerr << "Type " << AllTypeInfo[i].DetailInfo.TypeName << ": ";
-        for (int k = 0; k < AllTypeInfo[i].FakeVPointers.size(); k++)
-        {
-            std::cerr << "VPointer " << AllTypeInfo[i].FakeVPointers[k].second << " of root " << AllTypeInfo[AllTypeInfo[i].FakeVPointers[k].first].DetailInfo.TypeName << ", ";
-        }
-        std::cerr << std::endl;
     }
   }
   
@@ -914,8 +848,6 @@ namespace llvm {
 
     CHTreeNode & VType = CastSan.Types[TypeHash];
 
-    std::cerr << "Insert Update for Type: " << AllTypeInfo[k].DetailInfo.TypeName << std::endl;
-
     for (auto &entry : Elements) {
 	  uint32_t OffsetInt;
       if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
@@ -930,13 +862,13 @@ namespace llvm {
         TypeHashValueInt = getHashValueFromSTy(entry.second);
 
       uint32_t vpointer;
-      vpointer = CastSan.getFakeVPointer(&VType, TypeHashValueInt);
+      vpointer = CastSan.getFakeVPointer(&VType, TypeHashValueInt).second;
 
       if (vpointer == -1)
+      {
 	      continue;
+      }
 
-      std::cerr << "Insert Element" << CastSan.Types[TypeHashValueInt].MangledName << " of " << VType.MangledName << ", " << TypeHashValueInt << " with vpointer " << vpointer << std::endl;
-	      
       Value *OffsetV = ConstantInt::get(Int32Ty, OffsetInt);
       OffsetInt += (constantTypeSize->getZExtValue() * CurrArrayIndex);
       Value *first = ConstantInt::get(IntptrTyN, OffsetInt);

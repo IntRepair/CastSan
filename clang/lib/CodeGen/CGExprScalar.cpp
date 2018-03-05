@@ -1484,12 +1484,14 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
       if (!NonVirtualOffset)
         CGF.EmitHexTypeCheckForCast(DestTy->getPointeeType(),
+                                    E->getType()->getPointeeType(),
                                     Base.getPointer(),
                                     /*MayBeNull=*/false,
                                     CodeGenFunction::CFITCK_DerivedCast,
                                     CE->getLocStart());
       else
         CGF.EmitHexTypeCheckForchangingCast(DestTy->getPointeeType(),
+                                            E->getType()->getPointeeType(),
                                             Base.getPointer(),
                                             Derived.getPointer(),
                                             /*MayBeNull=*/false,

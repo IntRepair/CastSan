@@ -25,6 +25,8 @@
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Transforms/Instrumentation.h"
 
+#include <iostream>
+
 using namespace llvm;
 #define MAXLEN 10000
 
@@ -419,7 +421,7 @@ namespace {
                         &(HexTypeUtilSet->typeInfoArray));
 
     }
-   
+
     //Paul: generic module start funciton
     virtual bool runOnModule(Module &M) {
       // init HexTypePass
@@ -443,6 +445,8 @@ namespace {
       // Stack object tracing
       //Paul: stack obj tracing
       stackObjTracing(M);
+
+      replaceChecks(M);
       return false;
     }
   };

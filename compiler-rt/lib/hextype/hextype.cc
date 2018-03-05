@@ -45,8 +45,10 @@ __attribute__((always_inline))
 
 __attribute__((always_inline))
   inline static void* verifyTypeCasting(uptr* const SrcAddr,
-                                 uptr* const DstAddr,
-                                 const uint64_t DstTypeHashValue) {
+                                        uptr* const DstAddr,
+                                        const uint64_t DstTypeHashValue,
+                                        const uint64_t RangeStart,
+                                        const uint64_t RangeWidth) {
     if(SrcAddr == NULL) return nullptr;
 #ifdef HEX_LOG
     IncVal(numCasting, 1);
@@ -54,7 +56,14 @@ __attribute__((always_inline))
     ObjTypeMapEntry *FindValue = findObjInfo(SrcAddr);
     if (!FindValue)
       return DstAddr;
-    printf("Found Obj cast info (early): %ld : %d\n", SrcAddr, FindValue->FakeVPointer);
+    printf("Found Obj cast info (early): %lu : %d\n", SrcAddr, FindValue->FakeVPointer);
+    printf("RangeStart (currently PointerHash): %lu RangeWidth (0): %lu\n", RangeStart, RangeWidth);
+
+    if (FindValue->FakeVPointer < RangeStart || FindValue->FakeVPointer >= RangeStart + RangeWidth)
+    {
+	    printf("Found Bad Cast Early with CastSan!\n");
+	    printTypeConfusion(1, 0, DstTypeHashValue);
+    }
 #ifdef HEX_LOG
     IncVal(numVerifiedCasting, 1);
 #endif
@@ -359,22 +368,26 @@ void __type_casting_verification_print_cache_result(const uint64_t index) {
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_inline_normal(uptr* const SrcAddr,
                                                const uint64_t DstTypeHashValue) {
-  verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue);
+	verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue, 0, 0);
 }
 
 //Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification(uptr* const SrcAddr,
-                                       const uint64_t DstTypeHashValue) {
-  verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue);
+                                 const uint64_t DstTypeHashValue,
+                                 const uint64_t RangeStart,
+                                 const uint64_t RangeWidth) {
+	verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue, RangeStart, RangeWidth);
 }
 
 //Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_changing(uptr* const SrcAddr,
                                           uptr* const DstAddr,
-                                          const uint64_t DstTypeHashValue) {
-  verifyTypeCasting(SrcAddr, DstAddr, DstTypeHashValue);
+                                          const uint64_t DstTypeHashValue,
+                                          const uint64_t RangeStart,
+                                          const uint64_t RangeWidth) {
+	verifyTypeCasting(SrcAddr, DstAddr, DstTypeHashValue, RangeStart, RangeWidth);
 }
 
 //Paul: this function calls verifyTypeCasting()
@@ -383,7 +396,7 @@ void* __dynamic_casting_verification(uptr* const SrcAddr,
                                      const uint64_t DstTypeHashValue,
                                      std::ptrdiff_t Src2dst_offset) {
   uptr* TmpAddr = (uptr *)((char *)SrcAddr - Src2dst_offset);
-  return verifyTypeCasting(SrcAddr, TmpAddr, DstTypeHashValue);
+  return verifyTypeCasting(SrcAddr, TmpAddr, DstTypeHashValue, 0, 0);
 }
 
 //Paul: update object information

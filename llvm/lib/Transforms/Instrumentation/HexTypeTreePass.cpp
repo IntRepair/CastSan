@@ -25,6 +25,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <cxxabi.h>
+#include <iostream>
 
 #define MAXLEN 10000
 
@@ -528,6 +529,68 @@ namespace {
             BB++;
         }
     }
+
+	  void typecastinginsertranges(Module &M) {
+		  for (Module::iterator F = M.begin(), E = M.end(); F != E; F++)
+		  {
+			  for (Function::iterator BB = F->begin(), EB = F->end(); BB != EB;)
+			  {
+				  for (BasicBlock::iterator I = BB->begin(), EI = BB->end(); I != EI; I++)
+				  {
+					  if (CallInst * Call = dyn_cast<CallInst>(I))
+					  {
+						  if (auto Func = Call->getCalledFunction())
+						  {
+							  if (Func->getName().compare("__type_casting_verification") == 0 ||
+							      Func->getName().compare("__type_casting_verification_changing") == 0)
+							  {
+								  int o = 0;
+								  if (Func->getName().compare("__type_casting_verification_changing") == 0)
+									  o = 1;
+								  ConstantInt * ConstCastTypeHash = dyn_cast<ConstantInt>(Call->getArgOperand(1 + o));
+								  ConstantInt * ConstPointerTypeHash = dyn_cast<ConstantInt>(Call->getArgOperand(2 + o));
+
+								  uint64_t CastTypeH = ConstCastTypeHash->getZExtValue();
+								  uint64_t PointerTypeH = ConstPointerTypeHash->getZExtValue();
+								  
+								  CastSanUtil & CastSan = HexTypeUtilSet->CastSan;								  
+
+								  CHTreeNode & CastType = CastSan.Types[CastTypeH];
+								  CHTreeNode & PointerType = CastSan.Types[PointerTypeH];
+
+								  assert (CastType.TypeHash == CastTypeH && PointerType.TypeHash == PointerTypeH && "Type not found in CastSan MD!");
+
+								  CHTreeNode * RootForCast = CastSan.getRootForCast(&PointerType, &CastType);
+								  assert (RootForCast && "CastSan thinks this cast should be illegal");
+
+								  Constant * ConstRangeStart = nullptr;
+								  Constant * ConstRangeWidth = nullptr;
+								  for (CHTreeNode::TreeIndex & Index : CastType.TreeIndices)
+								  {
+									  if (Index.first == RootForCast)
+									  {
+										  uint64_t RangeStart = Index.second;
+										  uint64_t RangeWidth = CastSan.getRangeWidth(&CastType, Index.first);
+										  
+										  ConstRangeStart = ConstantInt::get(HexTypeUtilSet->Int64Ty, RangeStart);
+										  ConstRangeWidth = ConstantInt::get(HexTypeUtilSet->Int64Ty, RangeWidth);
+										  break;
+									  }
+								  }
+
+								  assert(ConstRangeStart && ConstRangeWidth && "TreeIndex is suddenly missing");
+
+								  Call->setArgOperand(2 + o, ConstRangeStart);
+								  Call->setArgOperand(3 + o, ConstRangeWidth);
+
+							  }
+						  }
+					  }
+				  }
+				  BB++;
+			  }
+		  }
+	  }
     
     //Paul: some optimization, todo
     void typecastinginlineoptimization(Module &M)  {
@@ -755,6 +818,8 @@ namespace {
         HexTypeUtilSet->setCastingRelatedSet();
       if (ClCreateCastRelatedTypeList)
         HexTypeUtilSet->extendCastingRelatedTypeSet();
+
+      typecastinginsertranges(M);
 
       // Apply typecasting inline optimization
       //Paul: todo
