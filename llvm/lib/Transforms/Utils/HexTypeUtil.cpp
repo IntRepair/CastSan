@@ -788,7 +788,7 @@ namespace llvm {
                                             BasicBlock* BasicBlock,
                                             Type * AllocTypeLLVM) {
     if (ClCastObjOpt && (AllocType != PLACEMENTNEW) &&
-        (AllocType != REINTERPRET)) {
+        (AllocType != REINTERPRET && AllocType != UPCAST)) {
       removeNonCastingRelatedObj(Elements);
       if (Elements.size() == 0) return;
     }
@@ -847,6 +847,10 @@ namespace llvm {
     assert (k != -1 && "Type not found in AllTypeInfo?");
 
     CHTreeNode & VType = CastSan.Types[TypeHash];
+
+    std::cerr << "AllocType: " << AllocType << " Type: " << VType.MangledName << " isPoly: " << VType.Polymorphic << std::endl;
+    if (AllocType != UPCAST && VType.Polymorphic)
+	    return;
 
     for (auto &entry : Elements) {
 	  uint32_t OffsetInt;
@@ -1142,6 +1146,8 @@ namespace llvm {
       return PLACEMENTNEW;
     else if (RuntimeFnName.compare("__reinterpret_casting_handle") == 0)
       return REINTERPRET;
+    else if (RuntimeFnName.compare("__poly_upcasting_handle") == 0)
+      return UPCAST;
     else
       return REALLOC;
   }
@@ -1159,12 +1165,12 @@ namespace llvm {
                           ObjAddr,
                           ArraySize, TypeSize, 0,
                           AllocType, ReallocAddr, BasicBlock, AllocTypeLLVM);
-    else if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
+    else if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET || AllocType == UPCAST)
       //Paul: object tracing when new() or reninterpret_cast() was used
       emitInstForObjTrace(SrcM, Builder, Elements, CONOBJADD,
                           ObjAddr, ArraySize, TypeSize, 0,
                           AllocType, NULL, BasicBlock, AllocTypeLLVM);
-    else if (dyn_cast<ConstantInt>(ArraySize) && AllocType != HEAPALLOC) {
+    else if (ArraySize && dyn_cast<ConstantInt>(ArraySize) && AllocType != HEAPALLOC) {
       ConstantInt *constantSize = dyn_cast<ConstantInt>(ArraySize);
       for (uint32_t i=0; i<constantSize->getZExtValue(); i++)
         //Paul: trace object when heap alloc was used

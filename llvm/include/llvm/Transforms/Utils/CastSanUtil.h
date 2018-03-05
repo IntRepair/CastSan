@@ -22,6 +22,7 @@ namespace llvm {
 		
 		std::string MangledName;
 		uint64_t TypeHash;
+		bool Polymorphic;
 		
 		std::vector<uint64_t> ParentHashes;
 		std::vector<uint64_t> ChildHashes;

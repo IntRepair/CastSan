@@ -25,6 +25,7 @@
 #define REALLOC 4
 #define PLACEMENTNEW 5
 #define REINTERPRET 6
+#define UPCAST 7
 
 #define CONOBJADD 1
 #define VLAOBJADD 2

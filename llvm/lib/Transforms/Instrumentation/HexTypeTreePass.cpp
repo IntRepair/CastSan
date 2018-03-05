@@ -96,6 +96,8 @@ namespace {
       //Paul: for the new operator
       if (extendTarget == PLACEMENTNEW)
         funName.assign("__placement_new_handle");
+      else if (extendTarget == UPCAST)
+	    funName.assign("__poly_upcasting_handle");
       else
         //Paul: for the reinterpret cast 
         funName.assign("__reinterpret_casting_handle");
@@ -104,8 +106,28 @@ namespace {
       IRBuilder<> Builder(next);
 
       StructElementInfoTy Elements;
-      StructType *EmptySet = nullptr;
-      Elements.push_back(std::make_pair(TargetHashValue, EmptySet));
+      StructType * LLVMType = nullptr;
+      if (extendTarget == UPCAST)
+      {
+	      bool found = false;
+	      for (auto & type : HexTypeUtilSet->AllTypeInfo)
+		      if (type.DetailInfo.TypeHashValue == TargetHashValue)
+		      {
+			      HexTypeUtilSet->getArrayOffsets(type.StructTy, Elements, 0);
+			      assert (Elements.size() && "No Elements?");
+			      LLVMType = type.StructTy;
+			      found = true;
+			      break;
+		      }
+
+	      assert (found && "Type not found?");
+      }
+      else
+      {
+	      StructType *EmptySet = nullptr;
+	      Elements.push_back(std::make_pair(TargetHashValue, EmptySet));
+      }
+      
 
       Value *first = Builder.CreatePtrToInt(call->getOperand(0),
                                             HexTypeUtilSet->IntptrTyN);
@@ -115,7 +137,7 @@ namespace {
       Value *ObjAddrT = Builder.CreateIntToPtr(NewAddr,
                                                HexTypeUtilSet->IntptrTyN);
       HexTypeUtilSet->insertUpdate(&M, Builder, funName, ObjAddrT,
-                                   Elements, 0, NULL, NULL, NULL, NULL);
+                                   Elements, 0, NULL, NULL, NULL, LLVMType);
       if (ClMakeLogInfo) {
         Function *ObjUpdateFunction =
             //Paul: insert the object update count function
@@ -147,7 +169,8 @@ namespace {
               if (call->getCalledFunction() != nullptr) {
                 std::string FnName = call->getCalledFunction()->getName();
                 if (FnName.compare("__placement_new_handle") == 0 ||
-                    FnName.compare("__reinterpret_casting_handle") == 0) {
+                    FnName.compare("__reinterpret_casting_handle") == 0 ||
+                    FnName.compare("__poly_upcasting_handle") == 0) {
                   if (HexTypeUtilSet->AllTypeInfo.size() > 0) {
                     if (FnName.compare("__placement_new_handle") == 0)
                       //Paul: trace the new operator
@@ -155,6 +178,8 @@ namespace {
                     else if (FnName.compare("__reinterpret_casting_handle") == 0)
                       //Paul: trace the reinterpret instruction
                       emitExtendObjTraceInst(M, 1, call, REINTERPRET);
+                    else if (FnName.compare("__poly_upcasting_handle") == 0)
+                      emitExtendObjTraceInst(M, 1, call, UPCAST);
                   }
                   (&*i)->eraseFromParent();
                   isUpdated = true;

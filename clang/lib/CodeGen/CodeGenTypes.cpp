@@ -137,11 +137,12 @@ void CodeGenTypes::CastSanCreateTypeMD(const CXXRecordDecl * ClassDecl,
     it++;
   }
 
-  CastSanInsertTypeMD(TyMangledName, TyHashValue, TyParents);
+  CastSanInsertTypeMD(TyMangledName, TyHashValue, ClassDecl->isPolymorphic(), TyParents);
 }
 
 void CodeGenTypes::CastSanInsertTypeMD(std::string TyMangledName,
                                        uint64_t TyHashValue,
+                                       bool Polymorphic,
                                        std::vector<uint64_t> TyParents)
 {
 	llvm::Module & M = CGM.getModule();
@@ -159,6 +160,9 @@ void CodeGenTypes::CastSanInsertTypeMD(std::string TyMangledName,
 	
 	// Hash for identification with HexType Metadata (llvm::StructType)
 	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDNumber(C, TyHashValue)));
+
+	// If Class is Polymorphic
+	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDNumber(C, Polymorphic && CGM.getCodeGenOpts().EmitCastChecks ? 1 : 0)));
 
 	// Parent Count for correct reading of Metadata in LLVM
 	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDNumber(C, TyParents.size())));

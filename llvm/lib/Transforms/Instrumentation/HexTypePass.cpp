@@ -446,7 +446,6 @@ namespace {
       //Paul: stack obj tracing
       stackObjTracing(M);
 
-      replaceChecks(M);
       return false;
     }
   };

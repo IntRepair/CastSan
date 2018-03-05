@@ -29,7 +29,10 @@ namespace llvm {
 			if (Type.ParentHashes.size())
 				continue; // Duplicate Type
 
-			uint64_t ParentsNum = getUInt64MD(MdIt->getOperand(2)->getOperand(0));
+			uint64_t Polymorphic = getUInt64MD(MdIt->getOperand(2)->getOperand(0));
+			Type.Polymorphic = Polymorphic == 1 ? true : false;
+			
+			uint64_t ParentsNum = getUInt64MD(MdIt->getOperand(3)->getOperand(0));
 
 			if (!ParentsNum)
 			{
@@ -38,7 +41,7 @@ namespace llvm {
 
 			for (uint64_t i = 0; i < ParentsNum; i++)
 			{
-				uint64_t ParentHash = getUInt64MD(MdIt->getOperand(3 + i)->getOperand(0));
+				uint64_t ParentHash = getUInt64MD(MdIt->getOperand(4 + i)->getOperand(0));
 				Type.ParentHashes.push_back(ParentHash);
 			}
 

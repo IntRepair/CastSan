@@ -336,6 +336,7 @@ public:
 
   void CastSanInsertTypeMD(std::string TyMangledName,
                            uint64_t TyHashValue,
+                           bool Polymorphic,
                            std::vector<uint64_t> TyParents);
 
 public:  // These are internal details of CGT that shouldn't be used externally.

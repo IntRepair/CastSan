@@ -3739,13 +3739,24 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
       E->getSubExpr()->getType()->getAs<RecordType>();
     auto *DerivedClassDecl = cast<CXXRecordDecl>(DerivedClassTy->getDecl());
 
+    const RecordType *BaseClassTy = E->getType()->getAs<RecordType>();
+    auto *BaseClassDecl = cast<CXXRecordDecl>(BaseClassTy->getDecl());
+
     LValue LV = EmitLValue(E->getSubExpr());
     Address This = LV.getAddress();
+
+    if(CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic() && !BaseClassDecl->isPolymorphic())
+    {
+	    std::cerr << "Inserting Upcast now!!!!" << std::endl;
+	    char InstName[100] = {"__poly_upcasting_handle"};
+	    getTypeElement(DerivedClassDecl, This.getPointer(), 0, InstName);
+    }
 
     // Perform the derived-to-base conversion
     Address Base = GetAddressOfBaseClass(
         This, DerivedClassDecl, E->path_begin(), E->path_end(),
         /*NullCheckValue=*/false, E->getExprLoc());
+
 
     return MakeAddrLValue(Base, E->getType(), LV.getAlignmentSource());
   }
@@ -3764,7 +3775,7 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
                                E->path_begin(), E->path_end(),
                                /*NullCheckValue=*/false);
 
-    if(CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic() && BaseClassDecl->isPolymorphic())
+    if(CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic())
       EmitVTableCastCheck(LV.getAddress(), DerivedClassDecl, BaseClassDecl);
 
 
@@ -3780,37 +3791,37 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
     /**
     Paul: emit cast for casts with nonvirtual offset and for virtual offset.
     Here we call either EmitHexTypeCheckForCast or EmitHexTypeCheckForchangingCast*/
-    if (SanOpts.has(SanitizerKind::HexType)) {
-      if (llvm::ClCreateCastRelatedTypeList)
-        HexTypeCommonUtilSet.updateCastingReleatedTypeIntoFile(
-          ConvertType(E->getType()));
-
-      llvm::Value *NonVirtualOffset =
-        CGM.GetNonVirtualBaseClassOffset(DerivedClassDecl,
-                                         E->path_begin(), E->path_end());
-      if (!NonVirtualOffset)
-      {
-        std::cerr << "Non-Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << std::endl;
-        EmitHexTypeCheckForCast(E->getType(),
-                                LV.getType(),
-                                LV.getAddress().getPointer(),
-                                /*MayBeNull=*/false,
-                                CFITCK_DerivedCast,
-                                E->getLocStart());
-      }
-      else
-      {
-	      std::cerr << " -------- Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << " ---------" << std::endl;
-        EmitHexTypeCheckForchangingCast(E->getType(),
-                                        LV.getType(),
-                                        LV.getAddress().getPointer(),
-                                        Derived.getPointer(),
-                                        /*MayBeNull=*/false,
-                                        CFITCK_DerivedCast,
-                                        E->getLocStart());
-      }
+    if (SanOpts.has(SanitizerKind::HexType) && (!CGM.getCodeGenOpts().EmitCastChecks || !DerivedClassDecl->isPolymorphic())) {
+		  if (llvm::ClCreateCastRelatedTypeList)
+			  HexTypeCommonUtilSet.updateCastingReleatedTypeIntoFile(
+				  ConvertType(E->getType()));
+		  
+		  llvm::Value *NonVirtualOffset =
+			  CGM.GetNonVirtualBaseClassOffset(DerivedClassDecl,
+			                                   E->path_begin(), E->path_end());
+		  if (!NonVirtualOffset)
+		  {
+			  std::cerr << "Non-Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << std::endl;
+			  EmitHexTypeCheckForCast(E->getType(),
+			                          LV.getType(),
+			                          LV.getAddress().getPointer(),
+			                          /*MayBeNull=*/false,
+			                          CFITCK_DerivedCast,
+			                          E->getLocStart());
+		  }
+		  else
+		  {
+			  std::cerr << " -------- Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << " ---------" << std::endl;
+			  EmitHexTypeCheckForchangingCast(E->getType(),
+			                                  LV.getType(),
+			                                  LV.getAddress().getPointer(),
+			                                  Derived.getPointer(),
+			                                  /*MayBeNull=*/false,
+			                                  CFITCK_DerivedCast,
+			                                  E->getLocStart());
+		  }
     }
-
+    
     if (SanOpts.has(SanitizerKind::CFIDerivedCast))
       EmitVTablePtrCheckForCast(E->getType(), Derived.getPointer(),
                                 /*MayBeNull=*/false,
