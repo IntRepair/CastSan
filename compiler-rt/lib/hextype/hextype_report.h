@@ -20,7 +20,10 @@
 #define numRemoveMiss 10
 
 #define numCasting 11
+#define numTreeCasting 101
+#define numPolyCasting 102
 #define numVerifiedCasting 12
+#define numVerifiedTreeCasting 103
 #define numCastingNull 13
 #define numHashMapNull 14
 

@@ -11,6 +11,7 @@
 //is here contained.
 #include "hextype.h"
 #include <string.h>
+#include <cmath>
 
 //Paul: find an object into the object tyoe map by providing the source address 
 //of the object.
@@ -43,6 +44,67 @@ __attribute__((always_inline))
     return nullptr;
   }
 
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+bool __type_casting_verification_ranged(const uint64_t start,
+                                        const uint64_t width,
+                                        const uint64_t alignment,
+                                        const uint64_t alignment_r,
+                                        const void* vpointer) {
+#ifdef HEX_LOG
+    IncVal(numCasting, 1);
+    IncVal(numPolyCasting, 1);
+#endif
+	uint64_t vptr = (uint64_t) vpointer;
+	int64_t diff_signed = vptr - start;
+	uint64_t diff = *reinterpret_cast<uint64_t*>(diff_signed);
+
+	uint64_t diffshr = diff >> alignment;
+	uint64_t diffshl = diff << alignment_r;
+
+	uint64_t diffRor = diffshr | diffshl;
+	if (diffRor < width) {
+#ifdef HEX_LOG
+		IncVal(numCastNonBadCast, 1);
+#endif
+		return true;
+	}
+#ifdef HEX_LOG
+	IncVal(numCastBadCast, 1);
+#endif
+#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
+	printTypeConfusion(1, 0, start);
+#endif
+	return false;
+}
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+bool __type_casting_verification_equal(const uint64_t start,
+                                       const void* vpointer) {
+#ifdef HEX_LOG
+    IncVal(numCasting, 1);
+    IncVal(numPolyCasting, 1);
+#endif
+
+	uint64_t vptr = (uint64_t) vpointer;
+	if (vptr == start)
+	{
+		
+#ifdef HEX_LOG
+		IncVal(numCastSame, 1);
+#endif
+		return true;
+	}
+	
+#ifdef HEX_LOG
+	IncVal(numCastBadCast, 1);
+#endif
+#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
+	printTypeConfusion(1, 0, start);
+#endif
+	return false;
+}
+
 __attribute__((always_inline))
   inline static void* verifyTypeCasting(uptr* const SrcAddr,
                                         uptr* const DstAddr,
@@ -52,21 +114,34 @@ __attribute__((always_inline))
     if(SrcAddr == NULL) return nullptr;
 #ifdef HEX_LOG
     IncVal(numCasting, 1);
+    IncVal(numTreeCasting, 1);
 #endif
     ObjTypeMapEntry *FindValue = findObjInfo(SrcAddr);
     if (!FindValue)
       return DstAddr;
-    printf("Found Obj cast info (early): %lu : %d\n", SrcAddr, FindValue->FakeVPointer);
-    printf("RangeStart (currently PointerHash): %lu RangeWidth (0): %lu\n", RangeStart, RangeWidth);
 
-    if (FindValue->FakeVPointer < RangeStart || FindValue->FakeVPointer >= RangeStart + RangeWidth)
-    {
-	    printf("Found Bad Cast Early with CastSan!\n");
-	    printTypeConfusion(1, 0, DstTypeHashValue);
-    }
 #ifdef HEX_LOG
-    IncVal(numVerifiedCasting, 1);
+    IncVal(numVerifiedTreeCasting, 1);
 #endif
+	int64_t diff_signed = FindValue->FakeVPointer - RangeStart;
+	uint64_t diff = *reinterpret_cast<uint64_t*>(&diff_signed);
+
+	if (diff >= RangeWidth) {
+#ifdef HEX_LOG
+		IncVal(numCastBadCast, 1);
+#endif
+#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
+		printTypeConfusion(1, 0, RangeStart);
+#endif
+		return nullptr;
+	}
+	
+#ifdef HEX_LOG
+		IncVal(numCastNonBadCast, 1);
+#endif
+
+		// Cast San END!
+
     if (DstAddr != SrcAddr) {
       int OffsetTmp = FindValue->Offset;
       if (OffsetTmp == -1)
@@ -405,6 +480,8 @@ void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
                            const int Offset,
                            uptr* const RuleAddr, const uint32_t FakeVPointer) {
   uptr MapIndex = getHash((uptr)AllocAddr);
+
+  printf("Inserting Type info: %lu, %ld\n", FakeVPointer, AllocAddr);
   if (ObjTypeMap[MapIndex].ObjAddr == nullptr ||
       ObjTypeMap[MapIndex].ObjAddr == AllocAddr) {
     ObjTypeMap[MapIndex].ObjAddr = AllocAddr;

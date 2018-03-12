@@ -621,6 +621,9 @@ void SDUpdateIndices::handleCheckCast(Module * M) {
   Function * cast_info = M->getFunction(Intrinsic::getName(Intrinsic::cast_info));
   const DataLayout &DL = M->getDataLayout();
   llvm::LLVMContext& C = M->getContext();
+  auto BoolTy = Type::getInt1Ty(C);
+  auto Int64Ty = Type::getInt64Ty(C);
+  auto Int8Ty = Type::getInt8Ty(C);
   Type *IntPtrTy = DL.getIntPtrType(C, 0);
 
   if(!cast_info) {
@@ -713,15 +716,40 @@ void SDUpdateIndices::handleCheckCast(Module * M) {
       SDLayoutBuilder::vtbl_name_t root = cha->getAncestor(vtbl);
       assert(layoutBuilder->alignmentMap.count(root));
 
-      llvm::Constant* alignment = llvm::ConstantInt::get(IntPtrTy, layoutBuilder->alignmentMap[root]);
-      llvm::Value *Args[] = {start, width, alignment, castVptr};
+      int64_t alignmentBits = floor(log(layoutBuilder->alignmentMap[root] + 0.5)/log(2.0));
+      llvm::Constant* alignment = llvm::ConstantInt::get(IntPtrTy, alignmentBits);
+      llvm::Constant* alignment_r = llvm::ConstantInt::get(IntPtrTy, DL.getPointerSizeInBits(0) - alignmentBits);
+
+      llvm::Constant* rootVtblInt    = dyn_cast<llvm::Constant>(start->getOperand(0));
+      llvm::GlobalVariable* rootVtbl = dyn_cast<llvm::GlobalVariable>(rootVtblInt->getOperand(0));
+      llvm::ConstantInt* startOff    = dyn_cast<llvm::ConstantInt>(start->getOperand(1));
 
       std::cerr << "CastCheck: Putting subst_cast_check in!" << std::endl;
- 
-      llvm::Value* newIntrCast = builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::subst_cast_check), Args);
-
-      CI->replaceAllUsesWith(newIntrCast);
-      CI->eraseFromParent();
+      
+      if (validConstVptr(rootVtbl, startOff->getSExtValue(), rangeWidth, DL, castVptr, 0)) {
+	      
+	      CI->replaceAllUsesWith(llvm::ConstantInt::getTrue(C));
+	      CI->eraseFromParent();
+      } else if (rangeWidth > 1) {
+	      llvm::Value *Args[] = {start, width, alignment, alignment_r, castVptr};
+	      Function *castCheckFunction =
+		      (Function*)M->getOrInsertFunction(
+			      "__type_casting_verification_ranged", BoolTy,
+			      Int64Ty, Int64Ty, Int64Ty, Int64Ty, Int8PtrTy, nullptr);
+	      llvm::Value* newIntrCast = builder.CreateCall(castCheckFunction, Args);
+	      
+	      CI->replaceAllUsesWith(newIntrCast);
+	      CI->eraseFromParent();
+      } else {
+	      llvm::Value *Args[] = {start, castVptr};
+	      Function *castCheckFunction =
+		      (Function*)M->getOrInsertFunction(
+			      "__type_casting_verification_equal", BoolTy,
+			      Int64Ty, Int8PtrTy, nullptr);
+	      llvm::Value* newIntrCast = builder.CreateCall(castCheckFunction, Args);
+	      CI->replaceAllUsesWith(newIntrCast);
+	      CI->eraseFromParent();
+      }
       /*if (rangeWidth > 1) {
         // The shift here is implicit since rangeWidth is in terms of indices, not bytes
 
