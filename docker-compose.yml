@@ -19,6 +19,15 @@ services:
         working_dir: /code/benchmarks
         user: llvm
         command: ./run_all_benchmarks.sh
+    nodejs:
+        build:
+            context: .
+            dockerfile: Dockerfile.environment
+        volumes:
+         - .:/code
+        working_dir: /code
+        user: llvm
+        command: ./build_node.sh
     bash_llvm:
         build:
             context: .

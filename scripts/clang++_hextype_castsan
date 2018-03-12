@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+XARGS="-flto -fsanitize=hextype -femit-ivtbl -femit-cast-checks -B/code/binutils/build/gold/ -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl -ldyncast"
+for arg in "$@"; do
+  case "$arg" in
+  -c|-E|-V)
+    XARGS=""
+    ;;
+  -shared)
+	XARGS="-flto -fsanitize=hextype -femit-ivtbl -femit-cast-checks -B/code/binutils/build/gold/ -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl -ldyncast"
+    ;;
+  esac
+done
+/code/build/bin/clang++ "$@" $XARGS
