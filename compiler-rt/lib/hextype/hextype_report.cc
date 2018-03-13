@@ -66,19 +66,23 @@ static void PrintStatResult(void) {
 
   snprintf(tmp, sizeof(tmp), "== Object Update status ==\n");
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: print global object updates
   snprintf(tmp, sizeof(tmp), "%lu: Object update\n", getVal(numGloUp) +
           getVal(numHeapUp) + getVal(numStackUp));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: othe statistics, see formula inside
   snprintf(tmp, sizeof(tmp), "\t%lu: Object update hit\n", getVal(numGloUp) +
           getVal(numHeapUp) + getVal(numStackUp) - getVal(numUpdateMiss));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: print object update misses
   snprintf(tmp, sizeof(tmp), "\t%lu: Object update miss\n",
            getVal(numUpdateMiss));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: global object update.
   snprintf(tmp, sizeof(tmp), "\t%lu: Global Object Update\n",
           getVal(numGloUp));
   printInfotoFile(tmp, fileName);
@@ -114,7 +118,8 @@ static void PrintStatResult(void) {
   snprintf(tmp, sizeof(tmp), "%lu (verified %lu): Casting operation\n",
            getVal(numCasting), getVal(numVerifiedCasting));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: object lookup success.
   snprintf(tmp, sizeof(tmp), "\t%lu: Object lookup success\n",
            getVal(numLookHit));
   printInfotoFile(tmp, fileName);
@@ -123,12 +128,14 @@ static void PrintStatResult(void) {
            "\t%lu: Object lookup success (find in the RB-tree)\n",
           getVal(numLookMiss));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: object update fail.
   snprintf(tmp, sizeof(tmp),
            "\t%lu: Object lookup fail (fail to find object)\n",
            getVal(numLookFail));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: total number of verified casts
   snprintf(tmp, sizeof(tmp), "%lu %lu: Verified type casting\n",
           getVal(numVerifiedCasting),
           getVal(numCastNonBadCast) +
@@ -136,6 +143,7 @@ static void PrintStatResult(void) {
           getVal(numCastBadCast)+getVal(numMissFindObj));
   printInfotoFile(tmp, fileName);
 
+  //Paul: same casts.
   snprintf(tmp, sizeof(tmp),
            "\t\t%lu: Safe casting (src and dst are same type)\n",
            getVal(numCastSame));
@@ -144,11 +152,13 @@ static void PrintStatResult(void) {
   snprintf(tmp, sizeof(tmp), "\t\t%lu: Safe casting (up casting)\n",
           getVal(numCastNonBadCast));
   printInfotoFile(tmp, fileName);
-
+  
+  //type confusions.
   snprintf(tmp, sizeof(tmp),
            "\t\t%lu: Type confusion cases\n",getVal(numCastBadCast));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: the four types of type confusions supported.
   snprintf(tmp, sizeof(tmp),
            "\t\t%lu: Type confusion type %lu %lu %lu %lu\n",
            getVal(numBadCastType1),
@@ -170,25 +180,31 @@ static void PrintStatResult(void) {
            getVal(numCastNoCacheUse));
   printInfotoFile(tmp, fileName);
 
+  //Paul: number of cache hit.
   snprintf(tmp, sizeof(tmp), "\t\t%lu: Casting operation cache hit\n",
           getVal(numCastHit));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: number of cache miss.
   snprintf(tmp, sizeof(tmp), "\t\t%lu: Casting operation cache Miss\n",
           getVal(numCastMiss));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: no cache was used.
   snprintf(tmp, sizeof(tmp), "\t\t%lu: Casting operation no cache use\n",
           getVal(numCastNoCacheUse));
   printInfotoFile(tmp, fileName);
 
+  //Paul: count the number of static cast
   snprintf(tmp, sizeof(tmp), "== Count dynamic and static cast number ==\n");
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: check dynamic cast number.
   snprintf(tmp, sizeof(tmp), "%lu: Check dynamic_cast number\n",
           getVal(numdynamicCast));
   printInfotoFile(tmp, fileName);
 
+  //Paul: check static cast number.
   snprintf(tmp, sizeof(tmp), "%lu: Check static_cast number\n",
            getVal(numstaticCast));
   printInfotoFile(tmp, fileName);
@@ -197,6 +213,7 @@ static void PrintStatResult(void) {
           getVal(numreinterpretCast));
   printInfotoFile(tmp, fileName);
 
+  //Paul: reinterpret cast objects.
   snprintf(tmp, sizeof(tmp), "%lu: reinterpret_cast objects\n",
           getVal(numreinterpretCast));
   printInfotoFile(tmp, fileName);
@@ -205,6 +222,8 @@ static void PrintStatResult(void) {
           getVal(numplacementNew));
   printInfotoFile(tmp, fileName);
 
+
+  //Paul: this is the summary
   snprintf(tmp, sizeof(tmp), "== Summary == \n");
   snprintf(tmp, sizeof(tmp), "Objects: %lu %lu %lu\n",
            getVal(numGloUp) + getVal(numHeapUp) + getVal(numStackUp),
@@ -212,7 +231,8 @@ static void PrintStatResult(void) {
           getVal(numGloUp) + getVal(numHeapUp) + getVal(numStackUp) +
           getVal(numreinterpretCast) + getVal(numplacementNew));
   printInfotoFile(tmp, fileName);
-
+  
+  //Paul: summary for the casts, castings, verified castings and bad cast detected.
   snprintf(tmp, sizeof(tmp), "Casting: %lu %lu %lu\n",
            getVal(numCasting), getVal(numVerifiedCasting), getVal(numCastBadCast));
   printInfotoFile(tmp, fileName);

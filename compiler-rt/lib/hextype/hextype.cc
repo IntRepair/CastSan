@@ -44,7 +44,7 @@ __attribute__((always_inline))
     return nullptr;
   }
 
-
+//Paul: this is CastSan function
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 bool __type_casting_verification_ranged(const uint64_t start,
                                         const uint64_t width,
@@ -78,6 +78,7 @@ bool __type_casting_verification_ranged(const uint64_t start,
 	return false;
 }
 
+//Paul: this yet another CastSan checking function
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 bool __type_casting_verification_equal(const uint64_t start,
                                        const void* vpointer) {
@@ -105,6 +106,7 @@ bool __type_casting_verification_equal(const uint64_t start,
 	return false;
 }
 
+//Paul: only the first part of this function is relevant for CastSan.
 __attribute__((always_inline))
   inline static void* verifyTypeCasting(uptr* const SrcAddr,
                                         uptr* const DstAddr,
@@ -140,7 +142,7 @@ __attribute__((always_inline))
 		IncVal(numCastNonBadCast, 1);
 #endif
 
-		// Cast San END!
+    //Paul: here the check of CastSan ends, the rest is not relevent.
 
     if (DstAddr != SrcAddr) {
       int OffsetTmp = FindValue->Offset;
@@ -385,7 +387,8 @@ void __type_casting_verification_inline(const uint64_t SrcTypeHashValue,
 #endif
     return;
   }
-
+  
+  //Paul: the phantom set is used to check for an safe upcast
   std::unordered_map<uint64_t, PhantomHashSet*>::iterator it;
   it = ObjPhantomInfo->find(DstTypeHashValue);
   if (it != ObjPhantomInfo->end()) {
@@ -475,6 +478,8 @@ void* __dynamic_casting_verification(uptr* const SrcAddr,
 }
 
 //Paul: update object information
+//this function is called when updating the object information directly,
+//the function is inserted by the HexTypeTreePass which annotates all relevant locations in code.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
                            const int Offset,
@@ -496,12 +501,14 @@ void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
   IncVal(numUpdateMiss, 1);
 #endif
   if (ObjTypeMap[MapIndex].HexTree == nullptr)
+    //Paul: if there is no tree then a tree is first created.
     ObjTypeMap[MapIndex].HexTree = rbtree_create();
 
   ObjTypeMapEntry *ObjValue =
     (ObjTypeMapEntry*)malloc(sizeof(ObjTypeMapEntry));
   memcpy(ObjValue, &ObjTypeMap[MapIndex], sizeof(ObjTypeMapEntry));
-
+  
+  //Paul: we insert something new in the tree.
   rbtree_insert(ObjTypeMap[MapIndex].HexTree,
                 ObjTypeMap[MapIndex].ObjAddr, ObjValue);
   ObjTypeMap[MapIndex].ObjAddr = AllocAddr;
@@ -603,6 +610,8 @@ void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
 }
 
 //Paul: remove object address from object type map
+//this function is called when free() is called on an object.
+//The object lifetime ends and as such the object can be safely removed
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __remove_direct_oinfo(uptr* const TargetAddr) {
   //Paul: get hash first
@@ -621,15 +630,16 @@ void __remove_direct_oinfo(uptr* const TargetAddr) {
       //Paul: rb tree look-up
       (ObjTypeMapEntry *)rbtree_lookup(ObjTypeMap[MapIndex].HexTree, TargetAddr);
     if (FindValue != nullptr) {
-      //Paul: erase the value
+      //Paul: erase the object value
       free(FindValue);
-      //Paul: delete from the rb tree
+      //Paul: delete the object from the rb tree
+      //this helps to keep the per object rb tree as small as possible.
       rbtree_delete(ObjTypeMap[MapIndex].HexTree, TargetAddr);
     }
   }
 }
 
-//Paul: same as remove direct function 
+//Paul: same the remove function above. This is the inline function version 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __remove_direct_oinfo_inline(uptr* const TargetAddr,
                                   const uint64_t MapIndex) {
@@ -644,7 +654,7 @@ void __remove_direct_oinfo_inline(uptr* const TargetAddr,
   }
 }
 
-//Paul: another remove version
+//Paul: another remove version, this removes by checking if it is an heapalloc or an realloc
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
                     unsigned long ArraySize, const uint32_t AllocType) {
@@ -688,7 +698,9 @@ void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
           //Paul: rb look-up
           (ObjTypeMapEntry *)rbtree_lookup(ObjTypeMap[MapIndex].HexTree, addr);
         if (FindValue != nullptr) {
+          //Paul: delete the object
           free(FindValue);
+          //Paul: delete the object from the rb tree
           rbtree_delete(ObjTypeMap[MapIndex].HexTree, addr);
         }
       }
@@ -697,6 +709,7 @@ void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
 }
 
 //Paul: update phantom info
+//this is used for updating the phantom object information.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_phantom_info(uint64_t *const PhantomInfo) {
   if (ObjTypeMap == nullptr) {
@@ -749,6 +762,7 @@ void __update_phantom_info(uint64_t *const PhantomInfo) {
 
 #ifdef HEX_LOG
 //Paul: used for logging
+//the function counts if the lookup was successfull.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __lookup_success_count(char VerifyResult) {
   IncVal(numCasting, 1);
@@ -799,7 +813,7 @@ void __obj_update_count(uint32_t objUpdateType, uint64_t vla) {
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __obj_remove_count(uint32_t objUpdateType, uint64_t vla) {
   switch (objUpdateType) {
-  case STACKALLOC:
+  case STACKALLOC: //Paul: only for stacl allocs implemented, why?
     IncVal(numStackRm, vla);
     break;
   }
