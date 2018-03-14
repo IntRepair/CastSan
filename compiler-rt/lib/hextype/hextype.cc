@@ -57,7 +57,6 @@ bool __type_casting_verification_ranged(const uint64_t start,
 #endif
 	uint64_t vptr = (uint64_t) vpointer;
 	int64_t diff_signed = vptr - start;
-	printf("SIgned: %ld\n", diff_signed);
 	uint64_t diff = *reinterpret_cast<uint64_t*>(&diff_signed);
 
 	uint64_t diffshr = diff >> alignment;
@@ -76,7 +75,6 @@ bool __type_casting_verification_ranged(const uint64_t start,
 #if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
 	printTypeConfusion(1, 0, start);
 #endif
-	printf("That is happening\n");
 	return false;
 }
 
@@ -105,8 +103,6 @@ uint8_t __type_casting_verification_equal(const uint64_t start,
 #if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
 	printTypeConfusion(1, 0, start);
 #endif
-
-	printf("This is happening\n");
 	return 0;
 }
 
@@ -139,7 +135,6 @@ __attribute__((always_inline))
 #if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
 		printTypeConfusion(1, 0, RangeStart);
 #endif
-		printf("Is this happening?\n");
 		return nullptr;
 	}
 	
@@ -481,13 +476,16 @@ void* __dynamic_casting_verification(uptr* const SrcAddr,
                                      const uint64_t alignment,
                                      const uint64_t alignment_r,
                                      std::ptrdiff_t Src2dst_offset) {
-	printf("Start: %ld\n", start);
   uptr* TmpAddr = (uptr *)((char *)SrcAddr - Src2dst_offset);
   uint64_t vptr = *(uint64_t*) SrcAddr;
   if (__type_casting_verification_ranged(start, width, alignment, alignment_r, (const void*)vptr))
+  {
 	  return TmpAddr;
+  }
   else
+  {
 	  return nullptr;
+  }
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE

@@ -567,8 +567,7 @@ namespace {
 						  if (auto Func = Call->getCalledFunction())
 						  {
 							  if (Func->getName().compare("__type_casting_verification") == 0 ||
-							      Func->getName().compare("__type_casting_verification_changing") == 0 ||
-							      Func->getName().compare("__dynamic_casting_verification"))
+							      Func->getName().compare("__type_casting_verification_changing") == 0)
 							  {
 								  int o = 0;
 								  if (Func->getName().compare("__type_casting_verification_changing") == 0)
