@@ -76,9 +76,13 @@ namespace {
           F->getName().startswith("__init_global_object"))
         return;
 
+      //Paul: creates a mem copy function prototype with 3 parameters
       Type *MemcpyParams[] = { HexTypeUtilSet->Int8PtrTy,
         HexTypeUtilSet->Int8PtrTy,
         HexTypeUtilSet->Int64Ty };
+      //Paul: get the memcpy intrinsic and our new mem copy prototype and generate a new function
+      //this memcpyfunc will be used at bottom of this function when creating the B.CreateCall();
+      //this memcpyfunc will have in total 5 parameters, see at the bottom
       Function *MemcpyFunc =
         Intrinsic::getDeclaration(&M, Intrinsic::memcpy, MemcpyParams);
        
@@ -104,11 +108,16 @@ namespace {
           Value *Dst = B.CreatePointerCast(NewAlloca,
                                            HexTypeUtilSet->Int8PtrTy);
           //Paul: destination and source addresses are added to the new param. list
+          //Paul: keep in mind the original memcpy as used in C looks like this
+          //void * memcpy ( void * destination, const void * source, size_t num );
+          //for this new memcpy we add Dst and Src as new parameters.
+          //this a general way to go when we want to handle other memory manipulation functions
+          //not sure if alloc() was handled by HexType, we can check it to see.
           Value *Param[5] = { Dst, Src,
             ConstantInt::get(HexTypeUtilSet->Int64Ty, size),
             ConstantInt::get(HexTypeUtilSet->Int32Ty, 1),
             ConstantInt::get(HexTypeUtilSet->Int1Ty, 0) };
-          //Paul: a new memcpy call with new parameters.
+          //Paul: a new memcpy call with new parameters will be created
           B.CreateCall(MemcpyFunc, Param);
         }
       }
@@ -308,7 +317,9 @@ namespace {
       bool isCurrentComplete = true;
       //Paul: cast the function to a CG call graph
       for (auto &I : *(*CG)[F]) {
-        return true;
+        //Paul: not sure why we need to return allways true here
+        //this makes the following code not reacheable?
+        return true; 
         Function *calleeFunction = I.second->getFunction();
         // Default to true to avoid accidental bugs on API changes
         bool result = false;
@@ -332,6 +343,7 @@ namespace {
           // Check recursively
         } else {
           bool isCalleeComplete;
+          //Paul: call recursively mayCast()
           result = mayCast(calleeFunction, visited, &isCalleeComplete);
           // Forbid from caching if callee was not complete (due to recursion)
           isCurrentComplete &= isCalleeComplete;
@@ -389,6 +401,8 @@ namespace {
         if (ClStackOpt && !isSafeStackFn(&*F))
           continue;
         //Paul: for example malloc is here handled
+        //it creates a new function call with more parameters
+        //e.g., the source and destination addresses used during a cast are also here added
         handleFnPrameter(M, &*F);
         for (Function::iterator BB = F->begin(), E = F->end(); BB != E; ++BB)
           for (BasicBlock::iterator i = BB->begin(),
@@ -411,6 +425,8 @@ namespace {
       handleAllocaDelete(M);
     }
 
+    //Paul: this function adds the global object tracing handler functions
+    //the main function call is at the bottom located to the function insertUpdate()
     void globalObjTracing(Module &M) {
       //Paul: create a function for tracing global objects.
       Function *FGlobal = setGlobalObjUpdateFn(M);
@@ -487,7 +503,9 @@ namespace {
       HexTypeUtilSet = &HexTypeUtilSetT;
       HexTypeUtilSet->initType(M);
       
-      //Paul: 
+      //Paul: builds the type relation for all children and all parents
+      // and sorts the parent sets and the phantom set.
+      //this is acheived by calling three functions inside createObjRelationsInfo(M);
       HexTypeUtilSet->createObjRelationInfo(M);
       if (HexTypeUtilSet->AllTypeInfo.size() > 0)
         emitTypeInfoAsGlobalVal(M);
@@ -499,11 +517,15 @@ namespace {
 
       // Global object tracing
       //Paul: start annotating global obj for tracing and emit function for tracing them
+      //inside this function the 1 time insertUpdate() function will be called, next the main emitInstForObjTrace() will be called, 
+      //this is the main function for adding all runtime functions
       globalObjTracing(M);
 
       // Stack object tracing
       //Paul: stack obj tracing, allocation and deletion when on the object is freed, the free() 
       //function is called on it
+      //inside this function the 2 times insertUpdate() function will be called, next the main emitInstForObjTrace() will be called, 
+      //this is the main function for adding all runtime functions
       stackObjTracing(M);
 
       return false;

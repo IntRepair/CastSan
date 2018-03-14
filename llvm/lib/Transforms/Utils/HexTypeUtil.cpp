@@ -274,13 +274,16 @@ namespace llvm {
     std::vector<StructType*> Types = M.getIdentifiedStructTypes();
     for (StructType *ST : Types) {
       TypeInfo NewType;
+      //Paul: not interesting, skip
       if (!HexTypeCommonUtil::isInterestingStructType(ST))
         continue;
-
+      
+      //Paul: not interesting, skip
       if (!ST->getName().startswith("trackedtype.") ||
           ST->getName().endswith(".base"))
         continue;
-
+      
+      //Paul: not interesting, skip
       if (ST->getName().startswith("struct.VerifyResultCache") ||
           ST->getName().startswith("struct.ObjTypeMap"))
         continue;
@@ -288,9 +291,12 @@ namespace llvm {
       parsingTypeInfo(ST, NewType, AllTypeNum++);
       AllTypeInfo.push_back(NewType);
     }
-
+    
+    //Paul: read the direct parent and phantom type information from clang
+    //the info is read in from a text file, metadata is not passed over metadata nodes
     getTypeInfoFromClang();
-
+    
+    //Paul: our stuff
     CastSan.getTypeMetadata(M);
 
     HashStructTypeMappingVec HashStructVec;
@@ -302,6 +308,7 @@ namespace llvm {
 	    i++;
     }
     CastSan.extendByStructTypes(HashStructVec);
+    //Paul: build our fake virtual tables
     CastSan.buildFakeVTables();
   }
 
@@ -311,23 +318,6 @@ namespace llvm {
       return false;
 
     return true;
-  }
-   
-  //Paul: ?
-  void HexTypeLLVMUtil::extendPhantomSet(int TargetIndex, int CurrentIndex) {
-    if (VisitCheck[CurrentIndex] == true)
-      return;
-
-    VisitCheck[CurrentIndex] = true;
-
-    AllTypeInfo[TargetIndex].AllPhantomTypes.push_back(
-      AllTypeInfo[CurrentIndex].DetailInfo);
-    TypeInfo* ParentNode = &AllTypeInfo[CurrentIndex];
-
-    for (uint32_t i=0;i<ParentNode->DirectPhantomTypes.size();i++)
-      extendPhantomSet(TargetIndex,
-                       ParentNode->DirectPhantomTypes[i].TypeIndex);
-    return;
   }
   
   //Paul: this inserts a remove stack object info function which will call the runtime
@@ -355,27 +345,46 @@ namespace llvm {
     insertRemove(SrcM, BuilderAI, "__remove_stack_oinfo", TargetAlloca,
                  Elements, TypeSize, DL.getTypeAllocSize(AllocaType), NULL);
   }
-   
-  //Paul: ?
-  void HexTypeLLVMUtil::extendParentSet(int TargetIndex, int CurrentIndex) {
+
+  //Paul: extends the pahntom types with detailed information, see next function
+  void HexTypeLLVMUtil::extendPhantomSet(int TargetIndex, int CurrentIndex) {
     if (VisitCheck[CurrentIndex] == true)
       return;
 
     VisitCheck[CurrentIndex] = true;
 
-    AllTypeInfo[TargetIndex].AllParents.push_back(
+    AllTypeInfo[TargetIndex].AllPhantomTypes.push_back(
       AllTypeInfo[CurrentIndex].DetailInfo);
     TypeInfo* ParentNode = &AllTypeInfo[CurrentIndex];
 
+    for (uint32_t i=0;i<ParentNode->DirectPhantomTypes.size();i++)
+      //Paul: recursive call
+      extendPhantomSet(TargetIndex, ParentNode->DirectPhantomTypes[i].TypeIndex);
+    return;
+  }
+   
+  //Paul: extends the parent set with detailed information
+  void HexTypeLLVMUtil::extendParentSet(int TargetIndex, int CurrentIndex) {
+    if (VisitCheck[CurrentIndex] == true)
+      return;
+
+    VisitCheck[CurrentIndex] = true;
+    
+    //Paul: add for each parent its parents int the all type info
+    AllTypeInfo[TargetIndex].AllParents.push_back(AllTypeInfo[CurrentIndex].DetailInfo);
+    TypeInfo* ParentNode = &AllTypeInfo[CurrentIndex];
+
     for (uint32_t i=0;i<ParentNode->DirectParents.size();i++)
+      //Paul: recursice call
       extendParentSet(TargetIndex, ParentNode->DirectParents[i].TypeIndex);
 
     for (uint32_t i=0;i<ParentNode->DirectPhantomTypes.size();i++)
-       extendParentSet(TargetIndex,
-                     ParentNode->DirectPhantomTypes[i].TypeIndex);
+       //Paul: recursive call
+       extendParentSet(TargetIndex, ParentNode->DirectPhantomTypes[i].TypeIndex);
     return;
   }
-
+   
+  //Paul: building fake virtual tables
   int HexTypeLLVMUtil::buildFakeVTables(int start, int t, int root) {
     for (int i = 0; i < AllTypeInfo[t].FakeVPointers.size(); i++)
       if (AllTypeInfo[t].FakeVPointers[i].first == root)
@@ -414,7 +423,7 @@ namespace llvm {
           if (i != t &&
               (AllTypeInfo[i].DirectParents[j].TypeHashValue ==
                AllTypeInfo[t].DetailInfo.TypeHashValue)) {
-            //Paul: add all direct parents
+            //Paul: add all direct parents to the all type info
             AllTypeInfo[i].DirectParents[j].TypeIndex = t;
 
             bool knownChild = false;
@@ -424,7 +433,7 @@ namespace llvm {
 
             if (!knownChild)
             {
-              //Paul: add all direct children
+              //Paul: add all direct children to the all type info 
               AllTypeInfo[t].DirectChildren.push_back(i);
             }
             
@@ -589,9 +598,9 @@ namespace llvm {
       return;
     //Paul: add all direct parents and direct children to the alltypemap 
     extendTypeRelationInfo();
-    //Paul: sort the parent set
+    //Paul: sort the parent set, just simple sorting
     getSortedAllParentSet();
-    //Paul: sort the phantom set
+    //Paul: sort the phantom set, just simple sorting
     getSortedAllPhantomSet();
   }
   
@@ -1203,7 +1212,7 @@ namespace llvm {
   }
   
   //Paul: insert the supported object allocations
-  //from inside this function, the main object type handling function is called,
+  //from inside this function, the main object type handling function (insertUpdate) is called, this locatted above the function from above (getAllocType)
   //in total it is called 4 times depending onm the type of allocation
   void HexTypeLLVMUtil::insertUpdate(Module *SrcM, IRBuilder<> &Builder,
                                  std::string RuntimeFnName, Value *ObjAddr,
