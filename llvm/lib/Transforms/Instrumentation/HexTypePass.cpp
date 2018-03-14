@@ -69,7 +69,8 @@ namespace {
 
       return FGlobal;
     }
-
+    
+    //Paul: handling of function parameters
     void handleFnPrameter(Module &M, Function *F) {
       if (F->empty() || F->getEntryBlock().empty() ||
           F->getName().startswith("__init_global_object"))
@@ -80,26 +81,34 @@ namespace {
         HexTypeUtilSet->Int64Ty };
       Function *MemcpyFunc =
         Intrinsic::getDeclaration(&M, Intrinsic::memcpy, MemcpyParams);
+       
       for (auto &a : F->args()) {
         Argument *Arg = dyn_cast<Argument>(&a);
         if (!Arg->hasByValAttr())
           return;
         Type *ArgPointedTy = Arg->getType()->getPointerElementType();
+        //Paul: is interesting if it is a struct or an array
         if (HexTypeUtilSet->isInterestingType(ArgPointedTy)) {
+          //Paul: determine the size of the current argument
           unsigned long size =
             HexTypeUtilSet->DL.getTypeStoreSize(ArgPointedTy);
           IRBuilder<> B(&*(F->getEntryBlock().getFirstInsertionPt()));
+          //Paul: create new allocation
           Value *NewAlloca = B.CreateAlloca(ArgPointedTy);
+          //Paul: replace the uses of this argument with the new allocation
           Arg->replaceAllUsesWith(NewAlloca);
+          //Paul: source address
           Value *Src = B.CreatePointerCast(Arg,
                                            HexTypeUtilSet->Int8PtrTy);
+          //Paul: destination address
           Value *Dst = B.CreatePointerCast(NewAlloca,
                                            HexTypeUtilSet->Int8PtrTy);
+          //Paul: destination and source addresses are added to the new param. list
           Value *Param[5] = { Dst, Src,
             ConstantInt::get(HexTypeUtilSet->Int64Ty, size),
             ConstantInt::get(HexTypeUtilSet->Int32Ty, 1),
             ConstantInt::get(HexTypeUtilSet->Int1Ty, 0) };
-          //Paul: create call of the memcpy function with given params
+          //Paul: a new memcpy call with new parameters.
           B.CreateCall(MemcpyFunc, Param);
         }
       }
@@ -129,20 +138,26 @@ namespace {
     
     //Paul: collect alloca info.
     void collectAllocaInstInfo(Instruction *I) {
+      //Paul: the key idea is that AllocaInst contains all possible 
+      //allocation instructions, we just need to see what is not supported.
       if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
+        //HexType checks if this allocation is an struct type or array type.
         if (HexTypeUtilSet->isInterestingType(AI->getAllocatedType())) {
           if (ClSafeStackOpt && HexTypeUtilSet->isSafeStackAlloca(AI))
             return;
           AllAllocaWithFnSet.insert(
             std::pair<Instruction *, Function *>(
               dyn_cast<Instruction>(I), AI->getParent()->getParent()));
+          //store this AI: allocation instruction
           AllAllocaSet.push_back(AI);
         }
     }
     
-    //Paul: handle an alloca add
+    //Paul: add tracing for an alloca instruction
+    //also add start and end times for tracing this instruction
     void handleAllocaAdd(Module &M) {
       for (AllocaInst *AI : AllAllocaSet) {
+        //Paul: get the next parent instruction of this instruction
         Instruction *next = HexTypeUtilSet->findNextInstruction(AI);
         IRBuilder<> Builder(next);
 
@@ -171,10 +186,14 @@ namespace {
         LifeTimeStart = LifeTimeStartSet.begin();
         LifeTimeEnd = LifeTimeStartSet.end();
         bool UseLifeTimeInfo = false;
-
+        
+        //Paul: iterate trough all the instructions of an alloca instruction
         for (; LifeTimeStart != LifeTimeEnd; LifeTimeStart++)
+          //Paul: 
           if (LifeTimeStart->first == AI) {
             IRBuilder<> BuilderAI(LifeTimeStart->second);
+            //Paul: insert an object info stack update using BuilderAI
+            //Paul: emit a tracing function for this instruction
             HexTypeUtilSet->insertUpdate(&M, BuilderAI, "__update_stack_oinfo",
                                          AI, offsets,
                                          HexTypeUtilSet->DL.getTypeAllocSize(
@@ -185,7 +204,9 @@ namespace {
 
         if (UseLifeTimeInfo)
           continue;
-
+        
+        //Paul: insert an object info stack update using Builder
+        //Paul: emit a tracing function for this instruction
         HexTypeUtilSet->insertUpdate(&M, Builder, "__update_stack_oinfo",
                                      AI, offsets,
                                      HexTypeUtilSet->DL.getTypeAllocSize(
@@ -293,6 +314,7 @@ namespace {
           isCurrentComplete = false;
           // Explicit call to checker
         } else if (
+          //Paul: return true if the calle has to do with casting
           calleeFunction->getName().find("__dynamic_casting_verification") !=
           StringRef::npos ||
           calleeFunction->getName().find("__type_casting_verification_changing") !=
@@ -311,6 +333,7 @@ namespace {
         if (result) {
           // Cache and report even if it was incomplete
           // Missing traversal can never flip it to not found
+          //Paul: store the function in my cast map.
           mayCastMap.insert(std::make_pair(F, true));
           *isComplete = true;
           return true;
@@ -328,7 +351,7 @@ namespace {
       return false;
     }
     
-    //Paul: ?
+    //Paul: check if it is a safe cast function
     bool isSafeStackFn(Function *F) {
       assert(F && "Function can't be null");
 
@@ -336,46 +359,65 @@ namespace {
       bool tmp;
       bool mayCurrentCast = mayCast(&*F, visitedFunctions, &tmp);
       mayCastMap.insert(std::make_pair(&*F, mayCurrentCast));
+      //if false return false
       if (!mayCurrentCast)
         return false;
 
       return true;
     }
-
+    
+    //Paul: this func. is used for tracing objects allocated on the stack
     void stackObjTracing(Module &M) {
       for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+        //Paul: if is not interesting for HexType then just continue
+        //A function is not interesting if it has no name, the initial block is empty,
+        //or its name starts with __init_global_object
         if(!HexTypeUtilSet->isInterestingFn(&*F))
           continue;
         // Apply stack optimization
+        // check that the function is a safe stack function, else continue
         if (ClStackOpt && !isSafeStackFn(&*F))
           continue;
-
+        //Paul: for example malloc is here handled
         handleFnPrameter(M, &*F);
         for (Function::iterator BB = F->begin(), E = F->end(); BB != E; ++BB)
           for (BasicBlock::iterator i = BB->begin(),
                ie = BB->end(); i != ie; ++i) {
+            //Paul: attach life time info to a basic block
+            //here we set the start or the end time depending 
+            //on which instruction was here used
             collectLifeTimeInfo(&*i);
+            //Paul: store allocation instruction information
             collectAllocaInstInfo(&*i);
           }
+        //Paul: store all return instructions of a function
+        //most likely this will be used to clean up the stack when leaving the stack.
         findReturnInsts(&*F);
       }
+      //Paul: insert object tracing functions for allocation instructions declaration
       handleAllocaAdd(M);
+      //Paul: insert object tracing functions for allocation instruction deletion
+      //life time ends here so we need to clean this allocations up
       handleAllocaDelete(M);
     }
 
     void globalObjTracing(Module &M) {
+      //Paul: create a function for tracing global objects.
       Function *FGlobal = setGlobalObjUpdateFn(M);
       BasicBlock *BBGlobal = BasicBlock::Create(M.getContext(),
                                                 "entry", FGlobal);
       IRBuilder<> BuilderGlobal(BBGlobal);
-
+      
+      //Paul: iterate trough all global objects.
       for (GlobalVariable &GV : M.globals()) {
+        //Paul: continue for obj. constructor, destructors, etc.
         if (GV.getName() == "llvm.global_ctors" ||
             GV.getName() == "llvm.global_dtors" ||
             GV.getName() == "llvm.global.annotations" ||
             GV.getName() == "llvm.used")
           continue;
-
+        
+        //Paul: it checks that thre GV: global variable is an array or struct allocation
         if (HexTypeUtilSet->isInterestingType(GV.getValueType())) {
           StructElementInfoTy offsets;
           Value *NElems = NULL;
@@ -394,7 +436,9 @@ namespace {
 
           HexTypeUtilSet->getArrayOffsets(AllocaType, offsets, 0);
           if(offsets.size() == 0) continue;
-
+          
+          //Paul: insert the update for the particular object type allocation and 
+          //emit the object tracing function
           HexTypeUtilSet->insertUpdate(&M, BuilderGlobal,
                                        "__update_global_oinfo",
                                        &GV, offsets, HexTypeUtilSet->DL.
@@ -402,6 +446,7 @@ namespace {
                                        NElems, NULL, BBGlobal, AllocaType);
         }
       }
+      //Paul: set the return of this function to be void
       BuilderGlobal.CreateRetVoid();
       appendToGlobalCtors(M, FGlobal, 0);
     }
@@ -422,7 +467,7 @@ namespace {
 
     }
 
-    //Paul: generic module start funciton
+    //Paul: generic module start function
     virtual bool runOnModule(Module &M) {
       // init HexTypePass
       CG = &getAnalysis<CallGraphWrapperPass>().getCallGraph();
@@ -436,10 +481,11 @@ namespace {
 
       // Init for only tracing casting related objects
       if (ClCastObjOpt || ClCreateCastRelatedTypeList)
+        //Paul: this is just a set on this object
         HexTypeUtilSet->setCastingRelatedSet();
 
       // Global object tracing
-      //Paul: global obj tracing
+      //Paul: start annotating global obj for tracing and emit function for tracing them
       globalObjTracing(M);
 
       // Stack object tracing

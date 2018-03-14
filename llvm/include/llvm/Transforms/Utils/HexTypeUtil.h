@@ -60,7 +60,7 @@ namespace llvm {
     uint32_t ElementSize;
     bool isRoot = false;
 
-	std::vector<int> DiamondRootInTree;
+    std::vector<int> DiamondRootInTree;
     std::vector<TypeDetailInfo> DirectParents;
     std::vector<int> DirectChildren;
     std::vector<std::pair<int, int>> FakeVPointers;

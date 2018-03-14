@@ -1152,7 +1152,7 @@ namespace llvm {
       return REALLOC;
   }
   
-  //Paul: insert the update functions
+  //Paul: insert the supported object allocations
   void HexTypeLLVMUtil::insertUpdate(Module *SrcM, IRBuilder<> &Builder,
                                  std::string RuntimeFnName, Value *ObjAddr,
                                  StructElementInfoTy &Elements,
@@ -1241,7 +1241,8 @@ namespace llvm {
     return getHashValueFromStr(str);
   }
   
-  //Paul: ?
+  //Paul: just check that the struct type is a struct type, is not literal and 
+  //not opaque and has name
   bool HexTypeCommonUtil::isInterestingStructType(StructType *STy) {
     if (STy->isStructTy() &&
         STy->hasName() &&
@@ -1257,20 +1258,25 @@ namespace llvm {
     Type *InnerTy = ATy->getElementType();
 
     if (StructType *InnerSTy = dyn_cast<StructType>(InnerTy))
+      //check that the struct has name, and is a struct, is not literal and 
+      //not opaque
       return HexTypeCommonUtil::isInterestingStructType(InnerSTy);
 
     if (ArrayType *InnerATy = dyn_cast<ArrayType>(InnerTy))
+      //recall this function recursively
       return isInterestingArrayType(InnerATy);
 
     return false;
   }
   
-  //Paul: ?
+  //Paul: this are the currently supported types by HexType
   bool HexTypeCommonUtil::isInterestingType(Type *rootType) {
+    //Paul: currently struct types are supported and array types.
     if (StructType *STy = dyn_cast<StructType>(rootType))
       return isInterestingStructType(STy);
 
     if (ArrayType *ATy = dyn_cast<ArrayType>(rootType))
+      //check that his is an array type
       return isInterestingArrayType(ATy);
 
     return false;
