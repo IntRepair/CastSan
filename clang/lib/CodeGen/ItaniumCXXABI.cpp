@@ -52,7 +52,7 @@ llvm::cl::opt<bool> ClEnhanceDynamicCast(
   "enhance-dynamic-cast",
   llvm::cl::desc(
     "enhance dynamic-cast's typecasting verification function"),
-  llvm::cl::Hidden, llvm::cl::init(false));
+  llvm::cl::Hidden, llvm::cl::init(true));
 
 namespace {
   /*Paul: all functions which were here added start with "sd_"
@@ -1396,7 +1396,7 @@ static llvm::Constant *getItaniumHexTypeDynamicCastFn(CodeGenFunction &CGF) {
   llvm::Type *PtrDiffTy =
     CGF.ConvertType(CGF.getContext().getPointerDiffType());
 
-  llvm::Type *Args[3] = { Int8PtrTy, Int64Ty, PtrDiffTy };
+  llvm::Type *Args[6] = { Int8PtrTy, Int64Ty, Int64Ty, Int64Ty, Int64Ty, PtrDiffTy };
 
   llvm::FunctionType *FTy =
     llvm::FunctionType::get(Int8PtrTy, Args, false);
@@ -1438,23 +1438,35 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastCall(
   llvm::Value *args[] = {Value, SrcRTTI, DestRTTI, OffsetHint};
   
   //Paul: create bad cast blocks
+  std::cerr << "Enhance Dynamic: " << ClEnhanceDynamicCast << std::endl;
   if((ClEnhanceDynamicCast) && CGF.SanOpts.has(SanitizerKind::HexType)) {
     llvm::HexTypeCommonUtil HexTypeUtil;
     QualType T = DestTy->getPointeeType();
     auto *ClassTy = T->getAs<RecordType>();
+    auto *SrcClassTy = SrcRecordTy->getAs<RecordType>();
     if (ClassTy) {
+	  assert(SrcClassTy && "Src Class has no decl???");
       const CXXRecordDecl *ClassDecl = cast<CXXRecordDecl>(ClassTy->getDecl());
+      const CXXRecordDecl *SrcClassDecl = cast<CXXRecordDecl>(SrcClassTy->getDecl());
       if ((!ClassDecl) || !ClassDecl->isCompleteDefinition() ||
-          !ClassDecl->hasDefinition() || ClassDecl->isAnonymousStructOrUnion()) {
+          !ClassDecl->hasDefinition() || ClassDecl->isAnonymousStructOrUnion() || (!SrcClassDecl) || !SrcClassDecl->isCompleteDefinition() ||
+          !SrcClassDecl->hasDefinition() || SrcClassDecl->isAnonymousStructOrUnion()) {
         return Value;
       }
 
       auto &layout = CGM.getTypes().getCGRecordLayout(ClassDecl);
+      auto &layoutSrc = CGM.getTypes().getCGRecordLayout(SrcClassDecl);
       std::string DstTyStr = layout.getLLVMType()->getName();
+      std::string SrcTyStr = layoutSrc.getLLVMType()->getName();
       uint64_t DstHashValue = HexTypeUtil.getHashValueFromStr(DstTyStr);
+      uint64_t SrcHashValue = HexTypeUtil.getHashValueFromStr(SrcTyStr);
       llvm::Value *DstValue = llvm::ConstantInt::get(CGF.Int64Ty,
                                                      DstHashValue);
-      llvm::Value *DynamicArgs[] = { Value, DstValue, OffsetHint };
+      llvm::Value *SrcValue = llvm::ConstantInt::get(CGF.Int64Ty,
+                                                     SrcHashValue);
+
+      llvm::Value * const_null = llvm::ConstantInt::getNullValue(CGF.Builder.getInt64Ty());
+      llvm::Value *DynamicArgs[] = { Value, SrcValue, DstValue, const_null, const_null, OffsetHint };
 
       DcastResult = CGF.EmitNounwindRuntimeCall(
         getItaniumHexTypeDynamicCastFn(CGF), DynamicArgs);
