@@ -681,11 +681,12 @@ namespace llvm {
     return &*it;
   }
   
-  //Paul: ?
+  //Paul: provides the offsets of the struct type 
   void HexTypeLLVMUtil::getArrayOffsets(Type *AI, StructElementInfoTy &Elements,
                                     uint32_t Offset) {
     if (ArrayType *Array = dyn_cast<ArrayType>(AI)) {
       uint32_t ArraySize = Array->getNumElements();
+      //Paul: this is an element of the initial array type
       Type *AllocaType = Array->getElementType();
       for (uint32_t i = 0; i < ArraySize ; i++) {
         //Paul: recursive call
@@ -693,13 +694,16 @@ namespace llvm {
                         (Offset + (i * DL.getTypeAllocSize(AllocaType))));
       }
     }
-
+    
+    //Paul: this breaks each array type into an struct type
+    // at this momment it can retrieve the offsets and put them into the elements array.
     else if (StructType *STy = dyn_cast<StructType>(AI))
       if (isInterestingStructType(STy))
         HexTypeLLVMUtil::getStructOffsets(STy, Elements, Offset);
   }
   
-  //Paul: ?
+  //Paul: this is called from inside the function above.
+  //
   void HexTypeLLVMUtil::getStructOffsets(StructType *STy,
                                      StructElementInfoTy &Elements,
                                      uint32_t Offset) {
@@ -715,6 +719,7 @@ namespace llvm {
 
     if (!duplicate)
       if (STy->getName().startswith("trackedtype."))
+        //Paul: it populates the elements array
         Elements.push_back(std::make_pair(Offset, STy));
 
     for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {

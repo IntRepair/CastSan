@@ -420,7 +420,7 @@ namespace {
       
       //Paul: iterate trough all global objects.
       for (GlobalVariable &GV : M.globals()) {
-        //Paul: continue for obj. constructor, destructors, etc.
+        //Paul: continue is the GV flobal variable is an obj. constructor, destructors, etc.
         if (GV.getName() == "llvm.global_ctors" ||
             GV.getName() == "llvm.global_dtors" ||
             GV.getName() == "llvm.global.annotations" ||
@@ -443,7 +443,9 @@ namespace {
             AllocaType = GV.getValueType();
             NElems = ConstantInt::get(HexTypeUtilSet->Int64Ty, 1);
           }
-
+          
+          //Paul: returns the offsets of this allocation types and stores them in offsets.
+          //the offsets are the DL date layout sizes of each of the components of this allocation type.
           HexTypeUtilSet->getArrayOffsets(AllocaType, offsets, 0);
           if(offsets.size() == 0) continue;
           
@@ -500,7 +502,8 @@ namespace {
       globalObjTracing(M);
 
       // Stack object tracing
-      //Paul: stack obj tracing, allocation and deletion when on the object is freed, the free() function is called on it
+      //Paul: stack obj tracing, allocation and deletion when on the object is freed, the free() 
+      //function is called on it
       stackObjTracing(M);
 
       return false;
