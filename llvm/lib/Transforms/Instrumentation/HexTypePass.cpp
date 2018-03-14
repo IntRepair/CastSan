@@ -143,6 +143,10 @@ namespace {
       if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
         //HexType checks if this allocation is an struct type or array type.
         if (HexTypeUtilSet->isInterestingType(AI->getAllocatedType())) {
+          //Paul: if this alloca is safe than this will be not added and the 
+          //object created in this allocation will be not traced, this is one of the 
+          //optimizations of HexType. We need somethink similar for 
+          //poly objects which will be not casted to non-poly objects
           if (ClSafeStackOpt && HexTypeUtilSet->isSafeStackAlloca(AI))
             return;
           AllAllocaWithFnSet.insert(
@@ -215,7 +219,7 @@ namespace {
       }
     }
     
-    //Paul: find return instructions
+    //Paul: find all return instructions of a function
     void findReturnInsts(Function *f) {
       std::vector<Instruction*> *TempInstSet = new std::vector<Instruction *>;
       for (inst_iterator j = inst_begin(f), E = inst_end(f); j != E; ++j)
@@ -281,6 +285,7 @@ namespace {
         for (; ReturnInstCur != ReturnInstEnd; ReturnInstCur++)
           if (dt.dominates(TargetInst, *ReturnInstCur)) {
             IRBuilder<> BuilderAI(*ReturnInstCur);
+            //Paul: emit removal instruction
             HexTypeUtilSet->emitRemoveInst(&M, BuilderAI, TargetAlloca);
           }
       }
@@ -297,10 +302,11 @@ namespace {
       auto mayCastIterator = mayCastMap.find(F);
       if (mayCastIterator != mayCastMap.end())
         return mayCastIterator->second;
-
+      //Paul: insert the function in the visited set
       visited.insert(F);
 
       bool isCurrentComplete = true;
+      //Paul: cast the function to a CG call graph
       for (auto &I : *(*CG)[F]) {
         return true;
         Function *calleeFunction = I.second->getFunction();
@@ -314,7 +320,8 @@ namespace {
           isCurrentComplete = false;
           // Explicit call to checker
         } else if (
-          //Paul: return true if the calle has to do with casting
+          //Paul: return true if the callee has to do with casting
+          //these are our cast verification functions
           calleeFunction->getName().find("__dynamic_casting_verification") !=
           StringRef::npos ||
           calleeFunction->getName().find("__type_casting_verification_changing") !=
@@ -357,6 +364,9 @@ namespace {
 
       std::set<Function*> visitedFunctions;
       bool tmp;
+      //Paul: call the mayCast() function from above
+      //these are the HexType verification functions
+      //these functions will be excluded
       bool mayCurrentCast = mayCast(&*F, visitedFunctions, &tmp);
       mayCastMap.insert(std::make_pair(&*F, mayCurrentCast));
       //if false return false
@@ -397,7 +407,7 @@ namespace {
       //Paul: insert object tracing functions for allocation instructions declaration
       handleAllocaAdd(M);
       //Paul: insert object tracing functions for allocation instruction deletion
-      //life time ends here so we need to clean this allocations up
+      //life time ends here so we need to clean these allocations up
       handleAllocaDelete(M);
     }
 
@@ -474,7 +484,8 @@ namespace {
       HexTypeLLVMUtil HexTypeUtilSetT(M.getDataLayout());
       HexTypeUtilSet = &HexTypeUtilSetT;
       HexTypeUtilSet->initType(M);
-
+      
+      //Paul: 
       HexTypeUtilSet->createObjRelationInfo(M);
       if (HexTypeUtilSet->AllTypeInfo.size() > 0)
         emitTypeInfoAsGlobalVal(M);
@@ -489,7 +500,7 @@ namespace {
       globalObjTracing(M);
 
       // Stack object tracing
-      //Paul: stack obj tracing
+      //Paul: stack obj tracing, allocation and deletion when on the object is freed, the free() function is called on it
       stackObjTracing(M);
 
       return false;

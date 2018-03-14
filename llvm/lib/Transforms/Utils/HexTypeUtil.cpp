@@ -68,7 +68,8 @@ namespace llvm {
     "make-typeinfo",
     cl::desc("create Type-hash information"),
     cl::Hidden, cl::init(false));
-
+  
+  //Paul: compute a crc hash value from a given string
   uint64_t crc64c(unsigned char *message) {
     int i, j;
     unsigned int byte;
@@ -117,7 +118,8 @@ namespace llvm {
        (TargetStr[i+1] >= '0' && TargetStr[i+1] <='9'))
       TargetStr.erase(i, TargetStr.size() - i);
   }
-
+  
+  //Paul: create a global value
   GlobalVariable* HexTypeLLVMUtil::emitAsGlobalVal(Module &M, char *GlobalVarName,
                                                    std::vector<Constant*> *TargetArray) {
     ArrayType *InfoArrayType = ArrayType::get(Int64Ty, TargetArray->size());
@@ -130,7 +132,10 @@ namespace llvm {
     return infoGlobal;
   }
   
-  //Paul: ?
+  //Paul:check if it is a safe stack allocation
+  //this is used to not trace objects which are not used in object casts.
+  // need to build something similar for our case where we want to not track
+  //polymorphic objects which are involved in only polymorphic casts.
   bool HexTypeLLVMUtil::isSafeStackAlloca(AllocaInst *AI) {
     // Go through all uses of this alloca and check whether all accesses to
     // the allocated object are statically known to be memory safe and, hence,
@@ -325,7 +330,7 @@ namespace llvm {
     return;
   }
   
-  //Paul: ?
+  //Paul: this inserts a remove stack object info function which will call the runtime
   void HexTypeLLVMUtil::emitRemoveInst(Module *SrcM, IRBuilder<> &BuilderAI,
                                    AllocaInst *TargetAlloca) {
     Value *TypeSize = NULL;
@@ -345,7 +350,8 @@ namespace llvm {
     Type *AllocaType = TargetAlloca->getAllocatedType();
     getArrayOffsets(AllocaType, Elements, 0);
     if (Elements.size() == 0) return;
-
+    
+    //Paul: insert the remove stack object info handler function
     insertRemove(SrcM, BuilderAI, "__remove_stack_oinfo", TargetAlloca,
                  Elements, TypeSize, DL.getTypeAllocSize(AllocaType), NULL);
   }
@@ -395,6 +401,7 @@ namespace llvm {
     return start;
   }
 
+  //Paul: add all direct parents and all direct children to the AllTypeInfo
   void HexTypeLLVMUtil::extendTypeRelationInfo() {
     for (uint32_t i=0;i<AllTypeNum;i++)
     {
@@ -407,6 +414,7 @@ namespace llvm {
           if (i != t &&
               (AllTypeInfo[i].DirectParents[j].TypeHashValue ==
                AllTypeInfo[t].DetailInfo.TypeHashValue)) {
+            //Paul: add all direct parents
             AllTypeInfo[i].DirectParents[j].TypeIndex = t;
 
             bool knownChild = false;
@@ -416,16 +424,19 @@ namespace llvm {
 
             if (!knownChild)
             {
+              //Paul: add all direct children
               AllTypeInfo[t].DirectChildren.push_back(i);
             }
-
+            
+            //Paul: used by phantom classes
+            //if data layout (DL) is the same than we have a phantom class
             if (DL.getTypeAllocSize(AllTypeInfo[i].StructTy) ==
                 DL.getTypeAllocSize(AllTypeInfo[t].StructTy)) {
               //Paul: store the same info at index i and t
-              AllTypeInfo[i].DirectPhantomTypes.push_back(
-                AllTypeInfo[t].DetailInfo);
-              AllTypeInfo[t].DirectPhantomTypes.push_back(
-                AllTypeInfo[i].DetailInfo);
+              //Paul: at index i add all phantom type info from index j
+              AllTypeInfo[i].DirectPhantomTypes.push_back(AllTypeInfo[t].DetailInfo);
+              //Paul: at index t add all phantom type info from index i
+              AllTypeInfo[t].DirectPhantomTypes.push_back(AllTypeInfo[i].DetailInfo);
             }
           }
     }
@@ -445,6 +456,7 @@ namespace llvm {
     for (std::set<uint64_t>::iterator it=TargetSet.begin();
          it!=TargetSet.end(); ++it)
       tmpSort.push_back(*it);
+    //Paul: sort this set, this is a basic sort function
     sort(tmpSort.begin(), tmpSort.end());
 
     TargetSet.clear();
@@ -469,9 +481,10 @@ namespace llvm {
         TmpSet.insert(AllTypeInfo[i].AllParents[j].TypeHashValue);
       //Paul: see previous function 
       sortSet(TmpSet);
-
+    
       typeInfoArray.push_back(
         ConstantInt::get(Int64Ty, TmpSet.size()));
+      //Paul: store the size of the set
       typeInfoArrayInt.push_back(TmpSet.size());
 
       for (std::set<uint64_t>::iterator it=TmpSet.begin();
@@ -505,7 +518,7 @@ namespace llvm {
       for (unsigned long j=0;j<AllTypeInfo[i].AllPhantomTypes.size();j++)
         TmpOnlyPhantomSet.insert(
           AllTypeInfo[i].AllPhantomTypes[j].TypeHashValue);
-
+      //Paul: sort the phantom set
       sortSet(TmpOnlyPhantomSet);
       typePhantomInfoArray.push_back(
         ConstantInt::get(Int64Ty, TmpOnlyPhantomSet.size()));
@@ -574,8 +587,11 @@ namespace llvm {
     getDirectTypeInfo(M);
     if (AllTypeInfo.size() == 0)
       return;
+    //Paul: add all direct parents and direct children to the alltypemap 
     extendTypeRelationInfo();
+    //Paul: sort the parent set
     getSortedAllParentSet();
+    //Paul: sort the phantom set
     getSortedAllPhantomSet();
   }
   
@@ -672,6 +688,7 @@ namespace llvm {
       uint32_t ArraySize = Array->getNumElements();
       Type *AllocaType = Array->getElementType();
       for (uint32_t i = 0; i < ArraySize ; i++) {
+        //Paul: recursive call
         getArrayOffsets(AllocaType, Elements,
                         (Offset + (i * DL.getTypeAllocSize(AllocaType))));
       }
@@ -709,6 +726,7 @@ namespace llvm {
   //Paul: remove objects which are not used for casting
   void HexTypeLLVMUtil::removeNonCastingRelatedObj(StructElementInfoTy &Elements) {
     bool FindType = true;
+    //Paul: Elements is a work list.
     while (FindType && Elements.size() > 0) {
       FindType = false;
       std::list<std::pair<uint64_t, StructType*>>::iterator it1;
@@ -720,6 +738,8 @@ namespace llvm {
 
         std::string TargetStr = entry.second->getName();
         syncTypeName(TargetStr);
+        //Paul: search in the casting related set for the target str, 
+        //in case it was found then it is safe to remove this element
         if ((CastingRelatedSet.find(TargetStr)) == CastingRelatedSet.end()) {
           Elements.erase(it1);
           FindType = true;
@@ -730,7 +750,7 @@ namespace llvm {
     }
   }
   
-  //Paul: ?
+  //Paul: verify the result cache
   GlobalVariable *HexTypeLLVMUtil::getVerifyResultCache(Module &M) {
     llvm::SmallString<32> ResultCacheTyName("struct.VerifyResultCache");
     llvm::Type *FieldTypes[] = {
@@ -787,6 +807,9 @@ namespace llvm {
   }
   
   //Paul: emit instructions for object tracing
+  //Paul: is the main function for emiting object tracing info.
+  //this is the biggest function in this file in terms of number of 
+  //code lines
   void HexTypeLLVMUtil::emitInstForObjTrace(Module *SrcM, IRBuilder<> &Builder,
                                             StructElementInfoTy &Elements,
                                             uint32_t EmitType,
@@ -799,6 +822,12 @@ namespace llvm {
                                             Type * AllocTypeLLVM) {
     if (ClCastObjOpt && (AllocType != PLACEMENTNEW) &&
         (AllocType != REINTERPRET && AllocType != UPCAST)) {
+      //Paul: remove all objects which are not relevant for 
+      //casting. These do not appear in a casting operation.
+      //This one of the optimizations of HexType, does not trace 
+      //such objects
+      //we need something similar for poly objects which can not be casted into a 
+      //static one, we need to implement our own use def analysis.
       removeNonCastingRelatedObj(Elements);
       if (Elements.size() == 0) return;
     }
@@ -826,6 +855,7 @@ namespace llvm {
 		    if (AllTypeInfo[i].StructTy == type)
 		    {
 			    k = i;
+                               //Paul: get the type hash, alltype info stores all type information
 			    TypeHash = AllTypeInfo[i].DetailInfo.TypeHashValue;
 			    break;
 		    }
@@ -847,6 +877,7 @@ namespace llvm {
 			  {
 				  indexArray.push_back(i);
 				  k = i;
+                                      //Paul: get the type hash
 				  TypeHash = AllTypeInfo[i].DetailInfo.TypeHashValue;
 				  break;
 			  }
@@ -922,6 +953,7 @@ namespace llvm {
 
         // create hashmap index
         Value *ShVal = Builder.CreateLShr(NewAddr, 3);
+        //Paul: see hardcoded map size value
         Value *mapSize = ConstantInt::get(IntptrTyN, 268435455);
         mapIndex = Builder.CreateAnd(ShVal, mapSize);
         mapIndex64 = Builder.CreatePtrToInt(mapIndex, Int64Ty);
@@ -940,7 +972,7 @@ namespace llvm {
       }
 
       switch (EmitType) {
-      //Paul: ?
+      //Paul: emit update for direct obj. info inline
       case CONOBJADD :
         {
           if (ClInlineOpt &&
@@ -980,6 +1012,7 @@ namespace llvm {
             Function *initFunction =
               (Function*)SrcM->getOrInsertFunction(
                 //Paul: this function will call into the compiler-rt
+                //used for updating directly the object type information
                 "__update_direct_oinfo_inline", VoidTy,
                 IntptrTyN, Int64Ty, Int32Ty, IntptrTyN, Int64Ty, Int32Ty, nullptr);
             Value *Param[6] = {ObjAddrT, TypeHashValue, OffsetV,
@@ -1018,7 +1051,7 @@ namespace llvm {
           }
           break;
         }
-      //Paul: ? virtual 
+      //Paul: add remove obj. info and update object info.
       case VLAOBJADD:
         {
           if (AllocType == REALLOC) {
@@ -1043,10 +1076,11 @@ namespace llvm {
                                                  VoidTy, IntptrTyN, Int64Ty,
                                                  Int32Ty, Int32Ty,
                                                  Int64Ty, IntptrTyN, Int32Ty, nullptr);
+          //Paul: here we added our FakeVPointer
           Value *ParamVLAADD[7] = {ObjAddrT, TypeHashValue, OffsetV,
                                    TypeSize, ArraySize, RuleAddr, FakeVPointer};
           Builder.CreateCall(initFunction, ParamVLAADD);
-          //Paul: object updaye count 
+          //Paul: object update count 
           if (ClMakeLogInfo) {
             Value *AllocTypeV =
               ConstantInt::get(Int32Ty, AllocType);
@@ -1060,7 +1094,7 @@ namespace llvm {
           }
           break;
         }
-      //Paul: object delete
+      //Paul: add the obj. delete and object remove count functions.
       case CONOBJDEL:
         {
          if (ClInlineOpt) {
@@ -1113,6 +1147,7 @@ namespace llvm {
           }
           break;
         }
+      //Paul: add the remove object info
       case VLAOBJDEL:
         {
           Function *initFunction =
@@ -1163,6 +1198,8 @@ namespace llvm {
   }
   
   //Paul: insert the supported object allocations
+  //from inside this function, the main object type handling function is called,
+  //in total it is called 4 times depending onm the type of allocation
   void HexTypeLLVMUtil::insertUpdate(Module *SrcM, IRBuilder<> &Builder,
                                  std::string RuntimeFnName, Value *ObjAddr,
                                  StructElementInfoTy &Elements,
@@ -1206,18 +1243,20 @@ namespace llvm {
 
     if (ArraySize == NULL)
       ArraySize = ConstantInt::get(Int64Ty, 1);
-
+    //Paul: retrieves the type of the allocation, realloc, global alloc, heap alloc, etc.
     uint32_t AllocType = getAllocType(RuntimeFnName);
     if (AllocType != HEAPALLOC && dyn_cast<ConstantInt>(ArraySize)) {
       ConstantInt *constantSize = dyn_cast<ConstantInt>(ArraySize);
       for (uint32_t i=0;i<constantSize->getZExtValue();i++)
         //Paul: insert instruction for obj deletion, CONOBJDEL (DEL = delete)
+        //this is the main function in this file, it inserts all the runtime calls
         emitInstForObjTrace(SrcM, Builder, Elements, CONOBJDEL,
-                            ObjAddr, ArraySize,
-                            TypeSize, i, AllocType, NULL, NULL, NULL);
+                            ObjAddr, ArraySize, TypeSize, i, 
+                          AllocType, NULL, NULL, NULL);
     }
     else
       //Paul: insert instruction for obj deletion, CONOBJDEL (DEL = delete)
+      //in this case the i parameter is 0
       emitInstForObjTrace(SrcM, Builder, Elements, VLAOBJDEL,
                           ObjAddr, ArraySize, TypeSize, 0,
                           AllocType, NULL, NULL, NULL);
@@ -1263,7 +1302,8 @@ namespace llvm {
     return false;
   }
   
-  //Paul: ?
+  //Paul: HexType is interested only in struct type and array type
+  //only in this types we can have allocation types for objects.
   static bool isInterestingArrayType(ArrayType *ATy) {
     Type *InnerTy = ATy->getElementType();
 
@@ -1331,7 +1371,7 @@ namespace llvm {
     return;
   }
   
-  //Paul: ?
+  //Paul: printing in the console the parent child relationships
   void HexTypeLLVMUtil::parsingTypeInfo(StructType *STy, TypeInfo &NewType,
                                     uint32_t AllTypeNum) {
     NewType.StructTy = STy;
