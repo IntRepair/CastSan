@@ -57,7 +57,7 @@ bool __type_casting_verification_ranged(const uint64_t start,
 #endif
 	uint64_t vptr = (uint64_t) vpointer;
 	int64_t diff_signed = vptr - start;
-	uint64_t diff = *reinterpret_cast<uint64_t*>(diff_signed);
+	uint64_t diff = *reinterpret_cast<uint64_t*>(&diff_signed);
 
 	uint64_t diffshr = diff >> alignment;
 	uint64_t diffshl = diff << alignment_r;
@@ -80,7 +80,7 @@ bool __type_casting_verification_ranged(const uint64_t start,
 
 //Paul: this yet another CastSan checking function
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-bool __type_casting_verification_equal(const uint64_t start,
+uint8_t __type_casting_verification_equal(const uint64_t start,
                                        const void* vpointer) {
 #ifdef HEX_LOG
     IncVal(numCasting, 1);
@@ -94,7 +94,7 @@ bool __type_casting_verification_equal(const uint64_t start,
 #ifdef HEX_LOG
 		IncVal(numCastSame, 1);
 #endif
-		return true;
+		return 1;
 	}
 	
 #ifdef HEX_LOG
@@ -103,7 +103,7 @@ bool __type_casting_verification_equal(const uint64_t start,
 #if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
 	printTypeConfusion(1, 0, start);
 #endif
-	return false;
+	return 0;
 }
 
 //Paul: only the first part of this function is relevant for CastSan.
@@ -471,10 +471,33 @@ void __type_casting_verification_changing(uptr* const SrcAddr,
 //Paul: this function calls verifyTypeCasting()
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void* __dynamic_casting_verification(uptr* const SrcAddr,
-                                     const uint64_t DstTypeHashValue,
+                                     const uint64_t start,
+                                     const uint64_t width,
+                                     const uint64_t alignment,
+                                     const uint64_t alignment_r,
                                      std::ptrdiff_t Src2dst_offset) {
   uptr* TmpAddr = (uptr *)((char *)SrcAddr - Src2dst_offset);
-  return verifyTypeCasting(SrcAddr, TmpAddr, DstTypeHashValue, 0, 0);
+  uint64_t vptr = *(uint64_t*) SrcAddr;
+  if (__type_casting_verification_ranged(start, width, alignment, alignment_r, (const void*)vptr))
+  {
+	  return TmpAddr;
+  }
+  else
+  {
+	  return nullptr;
+  }
+}
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+void* __dynamic_casting_verification_equal(uptr* const SrcAddr,
+                                           const uint64_t start,
+                                           std::ptrdiff_t Src2dst_offset) {
+  uptr* TmpAddr = (uptr *)((char *)SrcAddr - Src2dst_offset);
+  uint64_t vptr = *(uint64_t*) SrcAddr;
+  if (__type_casting_verification_equal(start, (const void*)vptr))
+	  return TmpAddr;
+  else
+	  return nullptr;
 }
 
 //Paul: update object information

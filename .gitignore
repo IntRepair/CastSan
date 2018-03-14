@@ -26,6 +26,7 @@ libdlcfi/libdlcfi.so
 libdyncast/libdyncast.a
 .vim
 .clang
+.clang_complete
 
 binutils/*
 setup_dir/*

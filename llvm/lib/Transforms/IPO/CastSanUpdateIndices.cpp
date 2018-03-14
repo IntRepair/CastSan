@@ -22,6 +22,7 @@
 
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/HexTypeUtil.h"
 
 #include <list>
 #include <vector>
@@ -86,7 +87,7 @@ namespace {
       //Intrinsic::sd_get_vcall_index -> null (there is no substitution function used here)
       handleRemainingSDGetVcallIndex(&M);   
 
-      handleCheckCast(&M); 
+      handleCheckCast(M); 
 
       layoutBuilder->removeOldLayouts(M);    //Paul: remove old layouts
       layoutBuilder->clearAnalysisResults(); //Paul: clear all data structures holding analysis data
@@ -112,7 +113,7 @@ namespace {
     void handleSDCheckVtbl(Module* M);
     void handleSDGetCheckedVtbl(Module* M);
     void handleRemainingSDGetVcallIndex(Module* M);
-    void handleCheckCast(Module* M);
+    void handleCheckCast(Module & M);
   };
 }
 
@@ -617,19 +618,16 @@ void SDUpdateIndices::handleRemainingSDGetVcallIndex(Module* M) {
   }
 }
 
-void SDUpdateIndices::handleCheckCast(Module * M) {
-  Function * cast_info = M->getFunction(Intrinsic::getName(Intrinsic::cast_info));
-  const DataLayout &DL = M->getDataLayout();
-  llvm::LLVMContext& C = M->getContext();
+void SDUpdateIndices::handleCheckCast(Module & M) {
+  Function * cast_info = M.getFunction(Intrinsic::getName(Intrinsic::cast_info));
+  const DataLayout &DL = M.getDataLayout();
+  llvm::LLVMContext& C = M.getContext();
   auto BoolTy = Type::getInt1Ty(C);
   auto Int64Ty = Type::getInt64Ty(C);
   auto Int8Ty = Type::getInt8Ty(C);
   Type *IntPtrTy = DL.getIntPtrType(C, 0);
 
-  if(!cast_info) {
-    return;
-  }
-
+  if(cast_info) {
   for(const Use & U : cast_info->uses()) {
     llvm::CallInst * CI = cast<CallInst>(U.getUser());
  
@@ -733,7 +731,7 @@ void SDUpdateIndices::handleCheckCast(Module * M) {
       } else if (rangeWidth > 1) {
 	      llvm::Value *Args[] = {start, width, alignment, alignment_r, castVptr};
 	      Function *castCheckFunction =
-		      (Function*)M->getOrInsertFunction(
+		      (Function*)M.getOrInsertFunction(
 			      "__type_casting_verification_ranged", BoolTy,
 			      Int64Ty, Int64Ty, Int64Ty, Int64Ty, Int8PtrTy, nullptr);
 	      llvm::Value* newIntrCast = builder.CreateCall(castCheckFunction, Args);
@@ -743,7 +741,7 @@ void SDUpdateIndices::handleCheckCast(Module * M) {
       } else {
 	      llvm::Value *Args[] = {start, castVptr};
 	      Function *castCheckFunction =
-		      (Function*)M->getOrInsertFunction(
+		      (Function*)M.getOrInsertFunction(
 			      "__type_casting_verification_equal", BoolTy,
 			      Int64Ty, Int8PtrTy, nullptr);
 	      llvm::Value* newIntrCast = builder.CreateCall(castCheckFunction, Args);
@@ -776,10 +774,147 @@ void SDUpdateIndices::handleCheckCast(Module * M) {
       }*/
 
     } else {
-      std::cerr << "CastCheck: llvm.sd.callsite.false:" << vtbl.first << "," << vtbl.second << std::endl;
-      CI->replaceAllUsesWith(llvm::ConstantInt::getFalse(C));
-      CI->eraseFromParent();
+	    std::cerr << "CastCheck: llvm.sd.callsite.false:" << vtbl.first << "," << vtbl.second << std::endl;
+	    CI->replaceAllUsesWith(llvm::ConstantInt::getFalse(C));
+	    CI->eraseFromParent();
     }
+  }
+  }
+  HexTypeLLVMUtil HexTypeUtilSet(M.getDataLayout());
+  HexTypeUtilSet.initType(M);
+  
+  HexTypeUtilSet.createObjRelationInfo(M);
+  CastSanUtil & CastSan = HexTypeUtilSet.CastSan;								  
+  
+  Function * subst_dynamic_castF = M.getFunction("__dynamic_casting_verification");
+  if (subst_dynamic_castF) {
+	  for (const Use &U : subst_dynamic_castF->uses()) {
+		  llvm::CallInst* CI = cast<CallInst>(U.getUser());
+		  IRBuilder<> builder(CI);
+		  
+		  ConstantInt * ConstDstTypeHash = dyn_cast<ConstantInt>(CI->getArgOperand(2));
+		  ConstantInt * ConstSrcTypeHash = dyn_cast<ConstantInt>(CI->getArgOperand(1));
+		  
+		  uint64_t DstTypeH = ConstDstTypeHash->getZExtValue();
+		  uint64_t SrcTypeH = ConstSrcTypeHash->getZExtValue();
+		  
+		  auto DstType = CastSan.Types[DstTypeH];
+		  auto SrcType = CastSan.Types[SrcTypeH];
+		  
+		  auto DstMangledName = DstType.MangledName;
+		  auto SrcMangledName = SrcType.MangledName;
+		  
+		  assert (DstType.Polymorphic && SrcType.Polymorphic && "Dynamic cast is not possible");
+		  
+		  auto BaseType = &SrcType;
+		  
+		  // find primary polymorphic parent
+		  while (BaseType->Parents.size()) {
+			  bool noPolyParent = true;
+			  for (auto parent : BaseType->Parents) {
+				  if (parent->Polymorphic) {
+					  BaseType = parent;
+					  noPolyParent = false;
+					  break;
+				  }
+			  }
+			  if (noPolyParent)
+				  break;
+		  }
+		  
+		  // get VTable info from CastSan
+		  // first the vtable we want to add the range check in
+		  SDLayoutBuilder::vtbl_t vtbl(BaseType->MangledName, 0);
+		  
+		  llvm::Constant *start;
+		  int64_t rangeWidth;
+		  
+		  // then get the more precise subtree in the vtable tree
+		  if (cha->knowsAbout(vtbl)) {
+			  if (BaseType->MangledName.compare(DstType.MangledName) != 0) {
+				  int64_t ind = cha->getSubVTableIndex(DstType.MangledName, BaseType->MangledName);
+				  std::cerr << "CastCheck: Index = " << ind << std::endl;
+				  if (ind != -1) {
+					  vtbl = SDLayoutBuilder::vtbl_t(DstType.MangledName, ind);
+				  }
+			  } 
+		  }
+		  else
+		  {
+			  std::cerr << "CastCheck: cha does not know about vtbl :(" << std::endl;
+		  }
+		  
+		  // the following is mainly the same as handleSDCheckVtbl() above:
+		  // get the start of the part of the vtable, calculate the range as count of all children of the root
+		  // ensure we got the vptr as int8ptr, get the alignement and put everything back in a Intrinsic
+		  if (cha->knowsAbout(vtbl) &&
+		      (!cha->isUndefined(vtbl) || cha->hasFirstDefinedChild(vtbl))) {
+			  
+			  start = cha->isUndefined(vtbl) ?
+				  layoutBuilder->getVTableRangeStart(cha->getFirstDefinedChild(vtbl)) :
+				  layoutBuilder->getVTableRangeStart(vtbl);
+			  
+			  rangeWidth = cha->getCloudSize(vtbl.first);
+			  std::cerr << "CastCheck: [rangeWidth = " << rangeWidth << " start = " << start << "] " << std::endl;
+		  } else {
+			  start = NULL;
+			  rangeWidth = 0;
+			  std::cerr << "CastCheck: [ no metadata available ] " << std::endl;
+		  }
+		  
+		  LLVMContext& C = CI->getContext();
+		  
+		  if (start) {
+			  IRBuilder<> builder(CI);
+			  builder.SetInsertPoint(CI);
+
+			  if (rangeWidth > 1)
+			  {
+				  llvm::Value *width    = llvm::ConstantInt::get(IntPtrTy, rangeWidth);
+				  llvm::Type *Int8PtrTy = IntegerType::getInt8PtrTy(C);
+				  
+				  // we do not have the root of the VTable: break up.
+				  if(!cha->hasAncestor(vtbl)) {
+					  std::cerr << vtbl.first.data() << std::endl;
+					  assert(false);
+				  }
+				  
+				  SDLayoutBuilder::vtbl_name_t root = cha->getAncestor(vtbl);
+				  assert(layoutBuilder->alignmentMap.count(root));
+				  
+				  int64_t alignmentBits = floor(log(layoutBuilder->alignmentMap[root] + 0.5)/log(2.0));
+				  llvm::Constant* alignment = llvm::ConstantInt::get(IntPtrTy, alignmentBits);
+				  llvm::Constant* alignment_r = llvm::ConstantInt::get(IntPtrTy, DL.getPointerSizeInBits(0) - alignmentBits);
+				  
+				  llvm::Constant* rootVtblInt    = dyn_cast<llvm::Constant>(start->getOperand(0));
+				  llvm::GlobalVariable* rootVtbl = dyn_cast<llvm::GlobalVariable>(rootVtblInt->getOperand(0));
+				  llvm::ConstantInt* startOff    = dyn_cast<llvm::ConstantInt>(start->getOperand(1));
+				  
+				  std::cerr << "CastCheck: Changing dynamic_cast arguments!" << std::endl;
+				  
+				  CI->setArgOperand(1, start);
+				  CI->setArgOperand(2, width);
+				  CI->setArgOperand(3, alignment);
+				  CI->setArgOperand(4, alignment_r);
+			  } else {
+				  auto src = CI->getArgOperand(0);
+				  auto off = CI->getArgOperand(5);
+				  
+				  Function *dynCastEqualFunction =
+					  (Function*)M.getOrInsertFunction(
+						  "__dynamic_casting_verification_equal", CI->getType(),
+						  src->getType(), HexTypeUtilSet.Int64Ty, off->getType(), nullptr);
+				  Value *Param[3] = { src, start, off };
+				  Value * dynCastEqual = builder.CreateCall(dynCastEqualFunction, Param);
+				  CI->replaceAllUsesWith(dynCastEqual);//Paul: write the v pointer back 
+				  CI->eraseFromParent();
+				  
+			  }
+		  }
+	  }
+	  
+  } else {	  
+	  std::cerr << "No dynamic casting functions.... " << std::endl;
   }
 }
 
