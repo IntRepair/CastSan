@@ -164,6 +164,13 @@ namespace llvm {
 		}
 	}
 
+	void CastSanUtil::extendByStructTypes(HashStructTypeMappingVec & vec) {
+		for (auto & entry : vec) {
+			if (Types.count(entry.first))
+				Types[entry.first].StructType = entry.second;
+		}
+	}
+
 	void CastSanUtil::buildFakeVTables() {
 		findDiamonds();
 
@@ -183,6 +190,9 @@ namespace llvm {
 
 		for (CHTreeNode * Child : Type->Children)
 		{
+			int isPhantomChild = 0;
+			if (Type->StructType && Child->StructType && DL.getTypeAllocSize(Type->StructType) == DL.getTypeAllocSize(Child->StructType))
+				isPhantomChild = 1;
 			for (auto & Node : Type->DiamondRootInTreeWithChild)
 				if (Node.first == Root && Node.second == Child)
 					continue; // stop here because of diamond
@@ -193,7 +203,7 @@ namespace llvm {
 			{
 				for (auto & Node : Type->DiamondRootInTreeWithChild)
 					if (Node.second == Child)
-						Index = buildFakeVTablesRecursive(Root, Index, Child);
+						Index = buildFakeVTablesRecursive(Root, Index - isPhantomChild, Child);
 			}
 			else
 			{
@@ -203,7 +213,7 @@ namespace llvm {
 						isDiamondInheritance = true;
 
 				if (!isDiamondInheritance)
-					Index = buildFakeVTablesRecursive(Root, Index, Child);
+					Index = buildFakeVTablesRecursive(Root, Index - isPhantomChild, Child);
 			}
 		}
 
@@ -234,7 +244,13 @@ namespace llvm {
 					isInRoot = true;
 
 			if (isInRoot)
+			{
 				width += getRangeWidth(Child, Root);
+
+				// Phantom classes do not increase width
+				if (Start->StructType && Child->StructType && DL.getTypeAllocSize(Start->StructType) == DL.getTypeAllocSize(Child->StructType))
+					width--;
+			}
 		}
 		return width;
 	}

@@ -12,10 +12,13 @@
 
 #include "llvm/IR/IRBuilder.h"
 #include <map>
+#include <vector>
 #define CS_MD_TYPEINFO "CS_Type_MD_"
 
 
 namespace llvm {
+	typedef std::pair<uint64_t, StructType*> HashStructTypeMapping;
+	typedef std::vector<HashStructTypeMapping> HashStructTypeMappingVec;
 	class CHTreeNode {
 	public:
 		typedef std::pair<CHTreeNode* const, uint64_t> TreeIndex;
@@ -23,6 +26,8 @@ namespace llvm {
 		std::string MangledName;
 		uint64_t TypeHash;
 		bool Polymorphic;
+
+		StructType * StructType;
 		
 		std::vector<uint64_t> ParentHashes;
 		std::vector<uint64_t> ChildHashes;
@@ -41,10 +46,15 @@ namespace llvm {
 		uint64_t buildFakeVTablesRecursive(CHTreeNode * Root, uint64_t Index, CHTreeNode * Type);
 		bool isSubtreeInTree(CHTreeNode * Subtree, CHTreeNode * Tree, CHTreeNode * Root = nullptr);
 		void removeDuplicates();
+		const DataLayout & DL;
 	public:
+		CastSanUtil(const DataLayout &DL)
+			: DL(DL) {
+		}
 		std::map<uint64_t, CHTreeNode> Types;
 		std::vector<CHTreeNode*> Roots;
 
+		void extendByStructTypes(HashStructTypeMappingVec & vec);
 		void getTypeMetadata(Module & M);
 		void buildFakeVTables();
 		uint64_t getRangeWidth(CHTreeNode * Start, CHTreeNode * Root);

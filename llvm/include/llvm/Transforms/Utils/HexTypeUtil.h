@@ -83,7 +83,8 @@ namespace llvm {
   class HexTypeLLVMUtil : public HexTypeCommonUtil {
   public:
     HexTypeLLVMUtil(const DataLayout &DL)
-      : DL(DL) {
+	    : DL(DL),
+	      CastSan(DL) {
       }
 
     const DataLayout &DL;
@@ -109,7 +110,7 @@ namespace llvm {
     std::set<std::string> CastingRelatedSet;
     std::set<std::string> CastingRelatedExtendSet;
 
-    CastSanUtil CastSan;
+	CastSanUtil CastSan;
 
     GlobalVariable *typeInfoArrayGlobal;
     GlobalVariable *typePhantomInfoArrayGlobal;

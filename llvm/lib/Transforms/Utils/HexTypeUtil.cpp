@@ -287,6 +287,16 @@ namespace llvm {
     getTypeInfoFromClang();
 
     CastSan.getTypeMetadata(M);
+
+    HashStructTypeMappingVec HashStructVec;
+
+    int i = 0;
+    for (auto & typeInfo : AllTypeInfo) {
+	    std::cerr << "Type: " << typeInfo.DetailInfo.TypeName << " Hash: " << typeInfo.DetailInfo.TypeHashValue << std::endl;
+	    HashStructVec.push_back(std::make_pair(typeInfo.DetailInfo.TypeHashValue, typeInfo.StructTy));
+	    i++;
+    }
+    CastSan.extendByStructTypes(HashStructVec);
     CastSan.buildFakeVTables();
   }
 
