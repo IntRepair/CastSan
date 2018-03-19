@@ -29,10 +29,7 @@ typedef struct rbtree_t {
 //note, each entry has a rb tree associated to it
 typedef struct ObjTypeMapEntry {
   uptr* ObjAddr;
-  uptr* RuleAddr;
-  uint64_t TypeHashValue;
   uint32_t HeapArraySize;
-  int Offset;
   uint32_t FakeVPointer;
   rbtree HexTree;
 } ObjTypeMapEntry;

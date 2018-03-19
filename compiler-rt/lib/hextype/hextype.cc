@@ -106,21 +106,30 @@ uint8_t __type_casting_verification_equal(const uint64_t start,
 	return 0;
 }
 
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+void __init_obj_type_map() {
+  if (ObjTypeMap == nullptr) {
+#ifdef HEX_LOG
+    InstallAtExitHandler();
+#endif
+    ObjTypeMap = new ObjTypeMapEntry[NUMMAP];
+  }
+}
+
+
 //Paul: only the first part of this function is relevant for CastSan.
 __attribute__((always_inline))
-  inline static void* verifyTypeCasting(uptr* const SrcAddr,
-                                        uptr* const DstAddr,
-                                        const uint64_t DstTypeHashValue,
-                                        const uint64_t RangeStart,
-                                        const uint64_t RangeWidth) {
-    if(SrcAddr == NULL) return nullptr;
+  inline static void verifyTypeCasting(uptr* const SrcAddr,
+                                       const uint64_t RangeStart,
+                                       const uint64_t RangeWidth) {
+	if (SrcAddr == NULL) return;
 #ifdef HEX_LOG
     IncVal(numCasting, 1);
     IncVal(numTreeCasting, 1);
 #endif
     ObjTypeMapEntry *FindValue = findObjInfo(SrcAddr);
     if (!FindValue)
-      return DstAddr;
+      return;
 
 #ifdef HEX_LOG
     IncVal(numVerifiedTreeCasting, 1);
@@ -135,303 +144,12 @@ __attribute__((always_inline))
 #if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
 		printTypeConfusion(1, 0, RangeStart);
 #endif
-		return nullptr;
+		return;
 	}
 	
 #ifdef HEX_LOG
 		IncVal(numCastNonBadCast, 1);
 #endif
-
-    //Paul: here the check of CastSan ends, the rest is not relevent.
-
-    if (DstAddr != SrcAddr) {
-      int OffsetTmp = FindValue->Offset;
-      if (OffsetTmp == -1)
-        OffsetTmp = 0;
-      long offset = ((char *)DstAddr - ((char *)SrcAddr - OffsetTmp));
-
-      FindValue = findObjInfo(DstAddr);
-      if (offset < 0) {
-        if (FindValue) {
-          uint64_t SrcTypeHashValue = FindValue->TypeHashValue;
-          printf("Found Obj cast info negative offset: $ld %d\n", DstAddr, FindValue->FakeVPointer);
-          if (SrcTypeHashValue == DstTypeHashValue) {
-#ifdef HEX_LOG
-            IncVal(numCastSame, 1);
-#endif
-            return DstAddr;
-          }
-        }
-#ifdef HEX_LOG
-        IncVal(numCastBadCast, 1);
-        IncVal(numCastBadCastMinus, 1);
-#endif
-#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
-        IncVal(numBadCastType1, 1);
-        printTypeConfusion(1, 0, DstTypeHashValue);
-#endif
-        return nullptr;
-      }
-      if (FindValue)
-      {
-	    printf("Found Obj cast info offset: %ld %d\n", DstAddr, FindValue->FakeVPointer);
-      }
-      if (!FindValue) {
-#ifdef HEX_LOG
-        IncVal(numCastBadCast, 1);
-        IncVal(numCastBadCastMinus, 1);
-#endif
-#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
-        IncVal(numBadCastType2, 1);
-        printTypeConfusion(2, 0, DstTypeHashValue);
-#endif
-        return nullptr;
-      }
-    }
-
-    uint64_t SrcTypeHashValue = FindValue->TypeHashValue;
-    printf("Found Obj cast info: %ld : %d\n", SrcAddr, FindValue->FakeVPointer);
-    uint64_t CacheIndex;
-    CacheIndex = (SrcTypeHashValue & 0xfff);
-    CacheIndex <<= 12;
-    CacheIndex |= (DstTypeHashValue & 0xfff);
-
-    if (SrcTypeHashValue == DstTypeHashValue) {
-#ifdef HEX_LOG
-      IncVal(numCastNoCacheUse, 1);
-      IncVal(numCastSame, 1);
-#endif
-      VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-      VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-      //Paul: allways when we have SrcTypeHashValue == DstTypeHashValue
-      //then VerifyResultCache[CacheIndex].VerifyResult = SAFECASTSAME
-      VerifyResultCache[CacheIndex].VerifyResult = SAFECASTSAME;
-      return DstAddr;
-    }
-
-    if (VerifyResultCache[CacheIndex].SrcHValue == SrcTypeHashValue &&
-        VerifyResultCache[CacheIndex].DstHValue == DstTypeHashValue) {
-#ifdef HEX_LOG
-      IncVal(numCastHit, 1);
-#endif
-      //Paul: if it is not a BADCAST then it is one of the other three posibilities
-      //upcast, cast same or info is missing.
-      if (VerifyResultCache[CacheIndex].VerifyResult != BADCAST) {
-#ifdef HEX_LOG
-        char VerifyResult = VerifyResultCache[CacheIndex].VerifyResult;
-        switch (VerifyResult) {
-        case SAFECASTUPCAST:
-          IncVal(numCastNonBadCast, 1);
-          break;
-        case SAFECASTSAME:
-          IncVal(numCastSame, 1);
-          break;
-        case FAILINFO:
-          IncVal(numMissFindObj, 1);
-          break;
-        }
-#endif
-        return DstAddr;
-      }
-    }
-
-    else {
-#ifdef HEX_LOG
-      IncVal(numCastMiss, 1);
-#endif
-      uptr* RuleAddr = FindValue->RuleAddr;
-      if (RuleAddr) {
-        uint64_t RuleHash;
-        char *BaseAddr = (char *)RuleAddr;
-        uint64_t RuleSize = *(FindValue->RuleAddr);
-        uint64_t start = 1, end = RuleSize, middle;
-        middle = (start + end) / 2;
-
-        while (start <= end) {
-          RuleHash = *((uint64_t *)(BaseAddr + (sizeof(uint64_t) * middle)));
-
-          if (RuleHash < DstTypeHashValue)
-            start = middle + 1;
-          else if(RuleHash == DstTypeHashValue) {
-            VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-            VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-            VerifyResultCache[CacheIndex].VerifyResult = SAFECASTUPCAST;
-#ifdef HEX_LOG
-            IncVal(numCastNonBadCast, 1);
-#endif
-            return DstAddr;
-          }
-          else
-            end = middle - 1;
-          middle = (start + end) /2;
-        }
-      } else {
-        VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-        VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-        VerifyResultCache[CacheIndex].VerifyResult = FAILINFO;
-#ifdef HEX_LOG
-        IncVal(numMissFindObj, 1);
-#endif
-        return nullptr;
-      }
-      
-      //Paul: perform the search in the phantom hash set
-      std::unordered_map<uint64_t, PhantomHashSet*>::iterator it;
-      it = ObjPhantomInfo->find(DstTypeHashValue);
-      if (it != ObjPhantomInfo->end()) {
-        PhantomHashSet *TargetPhantomHashSet = it->second;
-        char *BaseAddr = (char *)RuleAddr;
-        uint64_t RuleSize = *(FindValue->RuleAddr);
-        uint64_t RuleHash;
-        for (uint64_t PhantomHash : *TargetPhantomHashSet) {
-          uint64_t start = 1, end = RuleSize, middle;
-          middle = (start + end) / 2;
-          while (start <= end) {
-            RuleHash = *((uint64_t *)(BaseAddr + (sizeof(uint64_t) * middle)));
-            if (RuleHash < PhantomHash)
-              start = middle + 1;
-            else if(RuleHash == PhantomHash) {
-              //Paul: this is a safe upcast
-              VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-              VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-              VerifyResultCache[CacheIndex].VerifyResult = SAFECASTUPCAST;
-#ifdef HEX_LOG
-              IncVal(numCastNonBadCast, 1);
-#endif
-              return DstAddr;
-            }
-            else
-              end = middle - 1;
-            middle = (start + end) /2;
-          }
-        }
-      }
-      
-      //Paul: we have a bad cast here
-      VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-      VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-      VerifyResultCache[CacheIndex].VerifyResult = BADCAST;
-    }
-
-#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
-      IncVal(numBadCastType3, 1);
-      printTypeConfusion(3, SrcTypeHashValue, DstTypeHashValue);
-#endif
-
-#ifdef HEX_LOG
-    IncVal(numCastBadCast, 1);
-#endif
-    return nullptr;
-  }
-//Paul the sanitizer functions are listed, there are all called
-//by previously added code instrumentation.
-
-//Paul: verify cast inline function version.
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-void __type_casting_verification_inline(const uint64_t SrcTypeHashValue,
-                                         const uint64_t DstTypeHashValue,
-                                         const uint64_t ObjMapIndex,
-                                         const uint64_t CacheIndex) {
-#ifdef HEX_LOG
-  IncVal(numCasting, 1);
-  IncVal(numVerifiedCasting, 1);
-  IncVal(numLookHit, 1);
-  IncVal(numCastMiss, 1);
-#endif
-  
-  //Paul: we always haave a safe cast same if src type hash equals destination 
-  //type hash
-  if (SrcTypeHashValue == DstTypeHashValue) {
-#ifdef HEX_LOG
-    IncVal(numCastSame, 1);
-#endif
-    VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-    VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-    VerifyResultCache[CacheIndex].VerifyResult = SAFECASTSAME;
-    return;
-  }
-
-  ObjTypeMapEntry *FindValue = &ObjTypeMap[ObjMapIndex];
-  uptr* RuleAddr = FindValue->RuleAddr;
-  if (RuleAddr) {
-    uint64_t RuleHash;
-    char *BaseAddr = (char *)RuleAddr;
-    uint64_t RuleSize = *(FindValue->RuleAddr);
-    uint64_t start = 1, end = RuleSize, middle;
-    middle = (start + end) / 2;
-
-    while (start <= end) {
-      RuleHash = *((uint64_t *)(BaseAddr + (sizeof(uint64_t) * middle)));
-
-      if (RuleHash < DstTypeHashValue)
-        start = middle + 1;
-      else if(RuleHash == DstTypeHashValue) {
-        VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-        VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-        VerifyResultCache[CacheIndex].VerifyResult = SAFECASTUPCAST;
-#ifdef HEX_LOG
-        IncVal(numCastNonBadCast, 1);
-#endif
-        return;
-      }
-      else
-        end = middle - 1;
-      middle = (start + end) /2;
-    }
-  } else {
-    VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-    VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-    VerifyResultCache[CacheIndex].VerifyResult = FAILINFO;
-#ifdef HEX_LOG
-    IncVal(numMissFindObj, 1);
-#endif
-    return;
-  }
-  
-  //Paul: the phantom set is used to check for an safe upcast
-  std::unordered_map<uint64_t, PhantomHashSet*>::iterator it;
-  it = ObjPhantomInfo->find(DstTypeHashValue);
-  if (it != ObjPhantomInfo->end()) {
-    PhantomHashSet *TargetPhantomHashSet = it->second;
-    char *BaseAddr = (char *)RuleAddr;
-    uint64_t RuleSize = *(FindValue->RuleAddr);
-    uint64_t RuleHash;
-    for (uint64_t PhantomHash : *TargetPhantomHashSet) {
-      uint64_t start = 1, end = RuleSize, middle;
-      middle = (start + end) / 2;
-      while (start <= end) {
-        RuleHash = *((uint64_t *)(BaseAddr + (sizeof(uint64_t) * middle)));
-        if (RuleHash < PhantomHash)
-          start = middle + 1;
-        else if(RuleHash == PhantomHash) {
-          VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-          VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-          VerifyResultCache[CacheIndex].VerifyResult = SAFECASTUPCAST;
-#ifdef HEX_LOG
-          IncVal(numCastNonBadCast, 1);
-#endif
-          return;
-        }
-        else
-          end = middle - 1;
-        middle = (start + end) /2;
-      }
-    }
-  }
-  
-  //Paul: this block stores the bad cast, the other cases above are for
-  //upcasts, fail info., or same cast same
-  VerifyResultCache[CacheIndex].SrcHValue = SrcTypeHashValue;
-  VerifyResultCache[CacheIndex].DstHValue = DstTypeHashValue;
-  VerifyResultCache[CacheIndex].VerifyResult = BADCAST;
-#if defined(PRINT_BAD_CASTING) || defined(PRINT_BAD_CASTING_FILE)
-  IncVal(numBadCastType4, 1);
-  printTypeConfusion(4, SrcTypeHashValue, DstTypeHashValue);
-#endif
-#ifdef HEX_LOG
-  IncVal(numCastBadCast, 1);
-#endif
-  return;
 }
 
 //Paul: print the cache results.
@@ -446,7 +164,7 @@ void __type_casting_verification_print_cache_result(const uint64_t index) {
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __type_casting_verification_inline_normal(uptr* const SrcAddr,
                                                const uint64_t DstTypeHashValue) {
-	verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue, 0, 0);
+	verifyTypeCasting(SrcAddr, 0, 0);
 }
 
 //Paul: this function calls verifyTypeCasting()
@@ -455,17 +173,7 @@ void __type_casting_verification(uptr* const SrcAddr,
                                  const uint64_t DstTypeHashValue,
                                  const uint64_t RangeStart,
                                  const uint64_t RangeWidth) {
-	verifyTypeCasting(SrcAddr, SrcAddr, DstTypeHashValue, RangeStart, RangeWidth);
-}
-
-//Paul: this function calls verifyTypeCasting()
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-void __type_casting_verification_changing(uptr* const SrcAddr,
-                                          uptr* const DstAddr,
-                                          const uint64_t DstTypeHashValue,
-                                          const uint64_t RangeStart,
-                                          const uint64_t RangeWidth) {
-	verifyTypeCasting(SrcAddr, DstAddr, DstTypeHashValue, RangeStart, RangeWidth);
+	verifyTypeCasting(SrcAddr, RangeStart, RangeWidth);
 }
 
 //Paul: this function calls verifyTypeCasting()
@@ -504,19 +212,15 @@ void* __dynamic_casting_verification_equal(uptr* const SrcAddr,
 //this function is called when updating the object information directly,
 //the function is inserted by the HexTypeTreePass which annotates all relevant locations in code.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
-                           const int Offset,
-                           uptr* const RuleAddr, const uint32_t FakeVPointer) {
+void __update_direct_oinfo(uptr* const AllocAddr,
+                           const uint32_t FakeVPointer) {
   uptr MapIndex = getHash((uptr)AllocAddr);
 
-  printf("Inserting Type info: %lu, %ld\n", FakeVPointer, AllocAddr);
+  printf("Inserting Type info: %lu, %lu, %lu\n", ObjTypeMap, FakeVPointer, AllocAddr);
   if (ObjTypeMap[MapIndex].ObjAddr == nullptr ||
       ObjTypeMap[MapIndex].ObjAddr == AllocAddr) {
     ObjTypeMap[MapIndex].ObjAddr = AllocAddr;
-    ObjTypeMap[MapIndex].TypeHashValue = TypeHashValue;
-    ObjTypeMap[MapIndex].Offset = Offset;
     ObjTypeMap[MapIndex].HeapArraySize = 1;
-    ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
     ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
     return;
   }
@@ -535,19 +239,13 @@ void __update_direct_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
   rbtree_insert(ObjTypeMap[MapIndex].HexTree,
                 ObjTypeMap[MapIndex].ObjAddr, ObjValue);
   ObjTypeMap[MapIndex].ObjAddr = AllocAddr;
-  ObjTypeMap[MapIndex].TypeHashValue = TypeHashValue;
-  ObjTypeMap[MapIndex].Offset = Offset;
   ObjTypeMap[MapIndex].HeapArraySize = 1;
-  ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
   ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
 }
 
 //Paul: update direct object information inlined
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __update_direct_oinfo_inline(uptr* const AllocAddr,
-                                  const uint64_t TypeHashValue,
-                                  const int Offset,
-                                  uptr* RuleAddr,
                                   const uint64_t MapIndex, const uint32_t FakeVPointer) {
 #ifdef HEX_LOG
   IncVal(numUpdateMiss, 1);
@@ -564,48 +262,31 @@ void __update_direct_oinfo_inline(uptr* const AllocAddr,
   rbtree_insert(ObjTypeMap[MapIndex].HexTree,
                 ObjTypeMap[MapIndex].ObjAddr, ObjValue);
   ObjTypeMap[MapIndex].ObjAddr = AllocAddr;
-  ObjTypeMap[MapIndex].TypeHashValue = TypeHashValue;
-  ObjTypeMap[MapIndex].Offset = Offset;
   ObjTypeMap[MapIndex].HeapArraySize = 1;
-  ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
   ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
 }
 
 //Paul: handle reinterpret cast function
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __handle_reinterpret_cast(uptr* const AllocAddr,
-                               const uint64_t TypeHashValue,
-                               const int Offset,
-                               uptr* const RuleAddr, const uint32_t FakeVPointer) {
-  ObjTypeMapEntry *FindValue = findObjInfo(AllocAddr);
-  if (FindValue) {
-    if (FindValue->Offset != -1)
-      return;
-    //  verifyTypeCasting(AllocAddr, AllocAddr, TypeHashValue);
-  }
+                               const uint32_t FakeVPointer) {
   //Paul: it calls this function located above.
-  __update_direct_oinfo(AllocAddr, TypeHashValue, -1, RuleAddr, FakeVPointer);
+  __update_direct_oinfo(AllocAddr, FakeVPointer);
 }
 
 //Paul: update object information.
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
-                    const int Offset,
+void __update_oinfo(uptr* const AllocAddr,
                     const uint32_t TypeSize, const unsigned long ArraySize,
-                    uptr* const RuleAddr, const uint32_t FakeVPointer) {
+                    const uint32_t FakeVPointer) {
   for (uint32_t i=0;i<ArraySize;i++) {
     uptr *addr = (uptr *)((char *)AllocAddr + (TypeSize*i));
     uptr MapIndex = getHash((uptr)addr);
 
-    printf("Inserting Type info: %d, %d, %ld\n", i, FakeVPointer, addr);
-
     if (ObjTypeMap[MapIndex].ObjAddr == nullptr ||
         ObjTypeMap[MapIndex].ObjAddr == addr) {
       ObjTypeMap[MapIndex].ObjAddr = addr;
-      ObjTypeMap[MapIndex].TypeHashValue = TypeHashValue;
-      ObjTypeMap[MapIndex].Offset = Offset;
       ObjTypeMap[MapIndex].HeapArraySize  = ArraySize;
-      ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
       ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
       continue;
     }
@@ -624,10 +305,8 @@ void __update_oinfo(uptr* const AllocAddr, const uint64_t TypeHashValue,
       rbtree_insert(ObjTypeMap[MapIndex].HexTree,
                     ObjTypeMap[MapIndex].ObjAddr, ObjValue);
       ObjTypeMap[MapIndex].ObjAddr = addr;
-      ObjTypeMap[MapIndex].TypeHashValue = TypeHashValue;
-      ObjTypeMap[MapIndex].Offset = Offset;
       ObjTypeMap[MapIndex].HeapArraySize = ArraySize;
-      ObjTypeMap[MapIndex].RuleAddr = RuleAddr;
+      ObjTypeMap[MapIndex].FakeVPointer = FakeVPointer;
     }
   }
 }
@@ -728,58 +407,6 @@ void __remove_oinfo(uptr* const ObjectAddr, const uint32_t TypeSize,
         }
       }
     }
-  }
-}
-
-//Paul: update phantom info
-//this is used for updating the phantom object information.
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-void __update_phantom_info(uint64_t *const PhantomInfo) {
-  if (ObjTypeMap == nullptr) {
-#ifdef HEX_LOG
-    InstallAtExitHandler();
-#endif
-    ObjTypeMap = new ObjTypeMapEntry[NUMMAP];
-  }
-
-  if (VerifyResultCache == nullptr)
-    VerifyResultCache = new VerifyResultEntry[NUMCACHE];
-
-  if (ObjPhantomInfo == nullptr)
-    //Paul: new object phantom info map
-    ObjPhantomInfo = new std::unordered_map<uint64_t, PhantomHashSet*>;
-
-  uint64_t pos = 0;
-  uint64_t TotalNum = PhantomInfo[pos++];
-  for (uint64_t i=0;i<TotalNum;i++) {
-    uint64_t TypeHash = PhantomInfo[pos++];
-    uint64_t PhantomNum = PhantomInfo[pos++];
-    PhantomHashSet* PhantomSet;
-    auto it = ObjPhantomInfo->find(TypeHash);
-    bool isExist = false;
-    if (it == ObjPhantomInfo->end()) {
-      PhantomSet = new PhantomHashSet();
-    } else {
-      isExist = true;
-      PhantomSet = it->second;
-    }
-    for (uint64_t j=0;j<PhantomNum;j++) {
-      uint64_t innerHash = PhantomInfo[pos++];
-      auto it2 = ObjPhantomInfo->find(innerHash);
-      if (it2 != ObjPhantomInfo->end()) {
-        if (it2->second != NULL && it2->second != PhantomSet)
-          PhantomSet->insert(it2->second->begin(), it2->second->end());
-        //Paul: remove from the object phantom info map
-        ObjPhantomInfo->erase(it2);
-        //Paul: insert into the object phantom map
-        ObjPhantomInfo->insert(make_pair(innerHash, PhantomSet));
-      }
-      //Paul: insert into the phantom set
-      PhantomSet->insert(innerHash);
-    }
-    if(!isExist)
-      //Paul: insert in the object phatom info map the value: phantom set, key: type hash
-      ObjPhantomInfo->insert(make_pair(TypeHash, PhantomSet));
   }
 }
 

@@ -3094,11 +3094,6 @@ public:
   void EmitHexTypeCheckForCast(QualType T, QualType PT, llvm::Value *Derived,
                                bool MayBeNull, CFITypeCheckKind TCK,
                                SourceLocation Loc);
-  //Paul: changing (polymorphic check)
-  void EmitHexTypeCheckForchangingCast(QualType T, QualType PT, llvm::Value *Base,
-                                       llvm::Value *Derived,
-                                       bool MayBeNull, CFITypeCheckKind TCK,
-                                       SourceLocation Loc);
   //Paul: get the hash from qual type.
   llvm::Value *getHashValueFromQualType(QualType &T);
   void HexEmitObjTraceInst(StringRef , ArrayRef<llvm::Value *> );

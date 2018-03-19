@@ -938,21 +938,6 @@ namespace llvm {
       Value *FakeVPointer = ConstantInt::get(Int32Ty, vpointer);
       Value *TypeHashValue = ConstantInt::get(Int64Ty, TypeHashValueInt);
       Value *AllocTypeV = ConstantInt::get(Int32Ty, AllocType);
-      Value *RuleAddr = nullptr;
-      if (EmitType != CONOBJDEL && EmitType != VLAOBJDEL) {
-        uint64_t pos = 1;
-        for (uint64_t i = 0 ; i < typeInfoArrayInt.at(0); i++) {
-          if (typeInfoArrayInt.at(pos++) == TypeHashValueInt)
-            break;
-          uint64_t interSize = typeInfoArrayInt.at(pos);
-          pos += (interSize + 1);
-        }
-        Value *first = ConstantInt::get(IntptrTyN, (pos * sizeof(uint64_t)));
-        Value *second = Builder.CreatePtrToInt(typeInfoArrayGlobal, IntptrTyN);
-        RuleAddr = Builder.CreateIntToPtr(Builder.CreateAdd(first, second),
-                                          IntptrTyN);
-      }
-
       // apply Inline optimization
       Value *mapIndex;
       Value *isNull, *isEqual;
@@ -1007,19 +992,7 @@ namespace llvm {
             Builder.CreateStore(ObjAddrT, TargetIndexAddrValueAddrT);
             TargetIndexAddrValueAddrT =
               Builder.CreateGEP(TargetIndexAddr, {ConstantInt::get(Int32Ty, 0),
-                                ConstantInt::get(Int32Ty, 1)}, "");
-            Builder.CreateStore(RuleAddr, TargetIndexAddrValueAddrT);
-            TargetIndexAddrValueAddrT =
-              Builder.CreateGEP(TargetIndexAddr, {ConstantInt::get(Int32Ty, 0),
                                 ConstantInt::get(Int32Ty, 2)}, "");
-            Builder.CreateStore(TypeHashValue, TargetIndexAddrValueAddrT);
-            TargetIndexAddrValueAddrT =
-              Builder.CreateGEP(TargetIndexAddr, {ConstantInt::get(Int32Ty, 0),
-                                ConstantInt::get(Int32Ty, 4)}, "");
-            Builder.CreateStore(OffsetV, TargetIndexAddrValueAddrT);
-            TargetIndexAddrValueAddrT =
-              Builder.CreateGEP(TargetIndexAddr, {ConstantInt::get(Int32Ty, 0),
-                                ConstantInt::get(Int32Ty, 5)}, "");
             Builder.CreateStore(FakeVPointer, TargetIndexAddrValueAddrT);
 
             Builder.SetInsertPoint(ElseTerm);
@@ -1028,9 +1001,9 @@ namespace llvm {
                 //Paul: this function will call into the compiler-rt
                 //used for updating directly the object type information
                 "__update_direct_oinfo_inline", VoidTy,
-                IntptrTyN, Int64Ty, Int32Ty, IntptrTyN, Int64Ty, Int32Ty, nullptr);
-            Value *Param[6] = {ObjAddrT, TypeHashValue, OffsetV,
-                               RuleAddr, mapIndex64, FakeVPointer};
+                IntptrTyN, IntptrTyN, Int32Ty, nullptr);
+            Value *Param[5] = {ObjAddrT, 
+                               mapIndex64, FakeVPointer};
             //Paul: insert the correspinding call
             Builder.CreateCall(initFunction, Param);
             Builder.SetInsertPoint(InsertPt);
@@ -1042,12 +1015,11 @@ namespace llvm {
             else
               strcpy(TargetFn, "__update_direct_oinfo");
 
-            Value *Param[5] = {ObjAddrT, TypeHashValue, OffsetV, RuleAddr, FakeVPointer};
+            Value *Param[2] = {ObjAddrT, FakeVPointer};
             Function *initFunction =
               //Paul: create the function, see above the two possible names
               (Function*)SrcM->getOrInsertFunction(TargetFn,
-                                                   VoidTy, IntptrTyN, Int64Ty,
-                                                   Int32Ty, IntptrTyN, Int32Ty, nullptr);
+                                                   VoidTy, IntptrTyN, Int32Ty, nullptr);
             //Paul: insert the correspinding call
             Builder.CreateCall(initFunction, Param);
           }
@@ -1087,12 +1059,10 @@ namespace llvm {
           Function *initFunction =
             //Paul: update object info
             (Function*)SrcM->getOrInsertFunction("__update_oinfo",
-                                                 VoidTy, IntptrTyN, Int64Ty,
-                                                 Int32Ty, Int32Ty,
-                                                 Int64Ty, IntptrTyN, Int32Ty, nullptr);
+                                                 VoidTy, IntptrTyN, Int32Ty,
+                                                 Int64Ty, Int32Ty, nullptr);
           //Paul: here we added our FakeVPointer
-          Value *ParamVLAADD[7] = {ObjAddrT, TypeHashValue, OffsetV,
-                                   TypeSize, ArraySize, RuleAddr, FakeVPointer};
+          Value *ParamVLAADD[4] = {ObjAddrT, TypeSize, ArraySize, FakeVPointer};
           Builder.CreateCall(initFunction, ParamVLAADD);
           //Paul: object update count 
           if (ClMakeLogInfo) {

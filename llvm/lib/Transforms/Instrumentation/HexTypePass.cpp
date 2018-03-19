@@ -478,24 +478,8 @@ namespace {
       BuilderGlobal.CreateRetVoid();
       appendToGlobalCtors(M, FGlobal, 0);
     }
-    
-    //Paul: emit type info as global value
-    void emitTypeInfoAsGlobalVal(Module &M) {
-      std::string mname = M.getName();
-      HexTypeUtilSet->syncModuleName(mname);
 
-      char ParentSetGlobalValName[MAXLEN];
-
-      strcpy(ParentSetGlobalValName, mname.c_str());
-      strcat(ParentSetGlobalValName, ".hextypepass_cinfo");
-
-      HexTypeUtilSet->typeInfoArrayGlobal =
-        HexTypeUtilSet->emitAsGlobalVal(M, ParentSetGlobalValName,
-                        &(HexTypeUtilSet->typeInfoArray));
-
-    }
-
-    //Paul: generic module start function
+     //Paul: generic module start function
     virtual bool runOnModule(Module &M) {
       // init HexTypePass
       CG = &getAnalysis<CallGraphWrapperPass>().getCallGraph();
@@ -507,8 +491,6 @@ namespace {
       // and sorts the parent sets and the phantom set.
       //this is acheived by calling three functions inside createObjRelationsInfo(M);
       HexTypeUtilSet->createObjRelationInfo(M);
-      if (HexTypeUtilSet->AllTypeInfo.size() > 0)
-        emitTypeInfoAsGlobalVal(M);
 
       // Init for only tracing casting related objects
       if (ClCastObjOpt || ClCreateCastRelatedTypeList)

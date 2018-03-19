@@ -1476,26 +1476,14 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         HexTypeCommonUtilSet.updateCastingReleatedTypeIntoFile(
           ConvertType(E->getType()));
 
-      llvm::Value *NonVirtualOffset =
-        CGF.CGM.GetNonVirtualBaseClassOffset(DerivedClassDecl,
-                                             CE->path_begin(), CE->path_end());
       CGF.getTypeRelationInfo(DerivedClassDecl, DerivedClassDecl);
 
-      if (!NonVirtualOffset)
-        CGF.EmitHexTypeCheckForCast(DestTy->getPointeeType(),
-                                    E->getType()->getPointeeType(),
-                                    Base.getPointer(),
-                                    /*MayBeNull=*/false,
-                                    CodeGenFunction::CFITCK_DerivedCast,
-                                    CE->getLocStart());
-      else
-        CGF.EmitHexTypeCheckForchangingCast(DestTy->getPointeeType(),
-                                            E->getType()->getPointeeType(),
-                                            Base.getPointer(),
-                                            Derived.getPointer(),
-                                            /*MayBeNull=*/false,
-                                            CodeGenFunction::CFITCK_DerivedCast,
-                                            CE->getLocStart());
+      CGF.EmitHexTypeCheckForCast(DestTy->getPointeeType(),
+                                  E->getType()->getPointeeType(),
+                                  Base.getPointer(),
+                                  /*MayBeNull=*/false,
+                                  CodeGenFunction::CFITCK_DerivedCast,
+                                  CE->getLocStart());
     }
 
     return Derived.getPointer();

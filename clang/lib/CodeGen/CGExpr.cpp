@@ -3796,30 +3796,12 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
 			  HexTypeCommonUtilSet.updateCastingReleatedTypeIntoFile(
 				  ConvertType(E->getType()));
 		  
-		  llvm::Value *NonVirtualOffset =
-			  CGM.GetNonVirtualBaseClassOffset(DerivedClassDecl,
-			                                   E->path_begin(), E->path_end());
-		  if (!NonVirtualOffset)
-		  {
-			  std::cerr << "Non-Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << std::endl;
-			  EmitHexTypeCheckForCast(E->getType(),
-			                          LV.getType(),
-			                          LV.getAddress().getPointer(),
-			                          /*MayBeNull=*/false,
-			                          CFITCK_DerivedCast,
-			                          E->getLocStart());
-		  }
-		  else
-		  {
-			  std::cerr << " -------- Changing Cast to " << CGM.getCXXABI().GetClassMangledName(DerivedClassDecl) << " ---------" << std::endl;
-			  EmitHexTypeCheckForchangingCast(E->getType(),
-			                                  LV.getType(),
-			                                  LV.getAddress().getPointer(),
-			                                  Derived.getPointer(),
-			                                  /*MayBeNull=*/false,
-			                                  CFITCK_DerivedCast,
-			                                  E->getLocStart());
-		  }
+		  EmitHexTypeCheckForCast(E->getType(),
+		                          LV.getType(),
+		                          LV.getAddress().getPointer(),
+		                          /*MayBeNull=*/false,
+		                          CFITCK_DerivedCast,
+		                          E->getLocStart());
     }
     
     if (SanOpts.has(SanitizerKind::CFIDerivedCast))

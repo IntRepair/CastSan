@@ -40,9 +40,8 @@ namespace {
     TargetLibraryInfoImpl tlii;
 
     HexTypeLLVMUtil *HexTypeUtilSet;
-    
-    //Paul: annotate IR code such that we can update phantom info for objects
-    void emitPhantomTypeInfo(Module &M) {
+
+	void emitObjTypeMapInit(Module &M) {
       FunctionType *FTy = FunctionType::get(HexTypeUtilSet->VoidTy, false);
       Function *F = Function::Create(FTy, GlobalValue::InternalLinkage,
                                      "__init", &M);
@@ -54,24 +53,21 @@ namespace {
       BasicBlock *BB = BasicBlock::Create(M.getContext(), "entry", F);
       IRBuilder<> Builder(BB);
 
-      std::string initName = "__update_phantom_info";
+      std::string initName = "__init_obj_type_map";
       //Paul: get the ypdate phantom info function or insert it
       Constant *GCOVInit = M.getOrInsertFunction(initName,
                                                  HexTypeUtilSet->VoidTy,
-                                                 HexTypeUtilSet->Int64PtrTy,
                                                  nullptr);
       //Paul: create a call 
-      Builder.CreateCall(GCOVInit,
-                         Builder.CreatePointerCast(
-                           HexTypeUtilSet->typePhantomInfoArrayGlobal,
-                           HexTypeUtilSet->Int64PtrTy));
+      Builder.CreateCall(GCOVInit);
       //Paul: the above call returns void
       Builder.CreateRetVoid();
       //Paul: ?
       appendToGlobalCtors(M, F, 0);
     }
-    
-    //Paul: instrument IR with object tracing functions
+
+
+     //Paul: instrument IR with object tracing functions
     void emitExtendObjTraceInst(Module &M, int hashIndex,
                                 CallInst *call, int extendTarget) {
       ConstantInt *HashValueConst =
@@ -190,32 +186,7 @@ namespace {
             BB++;
         }
     }
-    
-    //Paul: emit type info as global value
-    void emitTypeInfoAsGlobalVal(Module &M) {
-      std::string mname = M.getName();
-      HexTypeUtilSet->syncModuleName(mname);
-
-      char ParentSetGlobalValName[MAXLEN];
-      char PhantomSetGlobalValName[MAXLEN];
-
-      strcpy(ParentSetGlobalValName, mname.c_str());
-      strcat(ParentSetGlobalValName, ".cinfo");
-
-      HexTypeUtilSet->typeInfoArrayGlobal =
-        HexTypeUtilSet->emitAsGlobalVal(M, ParentSetGlobalValName,
-                        &(HexTypeUtilSet->typeInfoArray));
-
-      strcpy(PhantomSetGlobalValName, mname.c_str());
-      strcat(PhantomSetGlobalValName, "phantom.cinfo");
-
-      HexTypeUtilSet->typePhantomInfoArrayGlobal =
-        HexTypeUtilSet->emitAsGlobalVal(M, PhantomSetGlobalValName,
-                        &HexTypeUtilSet->typePhantomInfoArray);
-      //Paul: emit phantom type info
-      emitPhantomTypeInfo(M);
-    }
-    
+   
     //Paul: check if it is alloca call
     bool isAllocCall(CallInst *val) {
       if (isAllocationFn(val, this->tli) &&
@@ -617,213 +588,6 @@ namespace {
 		  }
 	  }
     
-    //Paul: some optimization, todo
-    void typecastinginlineoptimization(Module &M)  {
-      GlobalVariable* ResultCache = HexTypeUtilSet->getVerifyResultCache(M);
-      GlobalVariable* GObjTypeMap = HexTypeUtilSet->getObjTypeMap(M);
-      for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F)
-        for (Function::iterator BB = F->begin(),
-             E = F->end(); BB != E;) {
-          bool update = false;
-          for (BasicBlock::iterator i = BB->begin(),
-               ie = BB->end(); i != ie; ++i)
-            if (CallInst *call = dyn_cast<CallInst>(&*i)) {
-              if (call->getCalledFunction() != nullptr) {
-                std::string functionName = call->getCalledFunction()->getName();
-                if (functionName.compare("__type_casting_verification") == 0) {
-                  update = true;
-                  Instruction *next = HexTypeUtilSet->findNextInstruction(call);
-                  IRBuilder<> Builder(next);
-                  // (3-0) check whether src addr is NULL
-                  Value* isNotNull =
-                    Builder.CreateIsNotNull(call->getArgOperand(0));
-                  Instruction *InsertPtMain = &*Builder.GetInsertPoint();
-                  TerminatorInst *ThenTermNotNull, *ElseTermNotNull;
-                  SplitBlockAndInsertIfThenElse(isNotNull,
-                                                InsertPtMain, &ThenTermNotNull,
-                                                &ElseTermNotNull, nullptr);
-
-                  // (3-1) get index using src address
-                  Builder.SetInsertPoint(ThenTermNotNull);
-                  Value *newPtr =
-                    Builder.CreatePtrToInt(call->getArgOperand(0),
-                                           HexTypeUtilSet->IntptrTyN);
-                  Value *ptrValueT =
-                    Builder.CreateIntToPtr(newPtr, HexTypeUtilSet->IntptrTyN);
-                  Value *ShVal = Builder.CreateLShr(newPtr, 3);
-                  Value *mapSize =
-                    ConstantInt::get(HexTypeUtilSet->IntptrTyN, 268435455);
-                  Value *mapIndex = Builder.CreateAnd(ShVal, mapSize);
-                  Value *mapIndex64 =
-                    Builder.CreatePtrToInt(mapIndex, HexTypeUtilSet->Int64Ty);
-
-                  // (3-2) access ObjTypeMap using index
-                  Value* ObjTypeMapInit= Builder.CreateLoad(GObjTypeMap);
-                  Value* TargetIndexAddr =
-                    Builder.CreateGEP(ObjTypeMapInit, mapIndex, "");
-                  Value* TargetIndexAddrValueAddr =
-                    Builder.CreateGEP(TargetIndexAddr,
-                                      {ConstantInt::get(
-                                          HexTypeUtilSet->Int32Ty, 0),
-                                      ConstantInt::get(
-                                        HexTypeUtilSet->Int32Ty, 0)}, "");
-
-                  Value* TargetIndexAddrValue =
-                    Builder.CreateLoad(TargetIndexAddrValueAddr);
-                  Value* isEqual = Builder.CreateICmpEQ(ptrValueT,
-                                                        TargetIndexAddrValue);
-                  Instruction *InsertPt = &*Builder.GetInsertPoint();
-                  TerminatorInst *ThenTerm , *ElseTerm ;
-                  SplitBlockAndInsertIfThenElse(isEqual,
-                                                InsertPt, &ThenTerm,
-                                                &ElseTerm, nullptr);
-
-                  // (4) check whether ObjTypeMap[index].addr == src
-                  Builder.SetInsertPoint(ThenTerm);
-                  // (4-1) get src hash value
-                  TargetIndexAddrValueAddr =
-                    Builder.CreateGEP(TargetIndexAddr,
-                                      {ConstantInt::get(
-                                          HexTypeUtilSet->Int32Ty, 0),
-                                      ConstantInt::get(
-                                        HexTypeUtilSet->Int32Ty, 2)}, "");
-                  // (4-2) get index using src and dst Hash Value
-                  TargetIndexAddrValue =
-                    Builder.CreateLoad(TargetIndexAddrValueAddr);
-
-                  // (4-3), (src & 0xfff);
-                  Value *srcIndex =
-                    Builder.CreateBitCast(TargetIndexAddrValue,
-                                          HexTypeUtilSet->Int64Ty);
-                  Value *andValue =
-                    ConstantInt::get(HexTypeUtilSet->Int64Ty, 4095);
-                  Value *leftMapIndex = Builder.CreateAnd(srcIndex, andValue);
-
-                  // (4-4), idxCache <<= 12;
-                  Value *curValue = Builder.CreateShl(leftMapIndex, 12);
-
-                  // (4-5), idxCache |= (dst & 0xfff);
-                  ConstantInt *constantHashValue2 =
-                    dyn_cast<ConstantInt>(call->getArgOperand(1));
-                  Value *dstValue = ConstantInt::get(
-                    HexTypeUtilSet->Int64Ty,
-                    constantHashValue2->getZExtValue());
-                  Value *rightValue = Builder.CreateAnd(dstValue, andValue);
-                  Value *cacheIndex = Builder.CreateOr(curValue, rightValue);
-
-                  // (4-6), verifiedResultCache[idxCache].srcHValue == src &&
-                  //        verifiedResultCache[idxCache].dstHValue == dst
-                  Value* ResultCacheInit = Builder.CreateLoad(ResultCache);
-                  TargetIndexAddr =
-                    Builder.CreateGEP(ResultCacheInit, cacheIndex, "");
-                  Value* TargetIndexAddrValueAddrT =
-                    Builder.CreateGEP(TargetIndexAddr,
-                                      {ConstantInt::get(
-                                          HexTypeUtilSet->Int32Ty, 0),
-                                      ConstantInt::get(
-                                        HexTypeUtilSet->Int32Ty, 0)}, "");
-                  TargetIndexAddrValue =
-                    Builder.CreateLoad(TargetIndexAddrValueAddrT);
-                  Value *srcisEqual =
-                    Builder.CreateICmpEQ(srcIndex, TargetIndexAddrValue);
-                  TargetIndexAddrValueAddrT =
-                    Builder.CreateGEP(TargetIndexAddr,
-                                      {ConstantInt::get(
-                                          HexTypeUtilSet->Int32Ty, 0),
-                                      ConstantInt::get(
-                                        HexTypeUtilSet->Int32Ty, 1)}, "");
-                  TargetIndexAddrValue =
-                    Builder.CreateLoad(TargetIndexAddrValueAddrT);
-                  Value *dstisEqual =
-                    Builder.CreateICmpEQ(dstValue, TargetIndexAddrValue);
-                  llvm::Value *isSatisfied =
-                    Builder.CreateAnd(srcisEqual, dstisEqual);
-                  Instruction *InInsertPt = &*Builder.GetInsertPoint();
-                  TerminatorInst *InThenTerm , *InElseTerm;
-                  SplitBlockAndInsertIfThenElse(isSatisfied,
-                                                InInsertPt, &InThenTerm,
-                                                &InElseTerm, nullptr);
-                  // (4-7) print cache result
-                  Builder.SetInsertPoint(InThenTerm);
-                  Value *GetCacheResult =
-                    Builder.CreateGEP(TargetIndexAddr,
-                                      {ConstantInt::get(
-                                          HexTypeUtilSet->Int32Ty, 0),
-                                      ConstantInt::get(
-                                        HexTypeUtilSet->Int32Ty, 2)}, "");
-                  Value *TargetIndexAddrValueCache =
-                    Builder.CreateLoad(GetCacheResult);
-                  Value *BadCast = ConstantInt::get(HexTypeUtilSet->Int8Ty, 0);
-                  Value *isEqualCacheResult =
-                    Builder.CreateICmpEQ(TargetIndexAddrValueCache, BadCast);
-                  Instruction *InInsertCachePt = &*Builder.GetInsertPoint();
-                  TerminatorInst *InThenCacheTerm , *InElseCacheTerm ;
-
-                  if (ClMakeLogInfo) {
-                    Function *objUpdateFunction =
-                      (Function*)M.getOrInsertFunction(
-                        "__lookup_success_count", HexTypeUtilSet->VoidTy,
-                        HexTypeUtilSet->Int8Ty, nullptr);
-                    Value *Param[1] = { TargetIndexAddrValueCache };
-                    Builder.CreateCall(objUpdateFunction, Param);
-                  }
-
-                  SplitBlockAndInsertIfThenElse(isEqualCacheResult,
-                                                InInsertCachePt,
-                                                &InThenCacheTerm,
-                                                &InElseCacheTerm, nullptr);
-                  Builder.SetInsertPoint(InThenCacheTerm);
-                  Function *initFunction =
-                    (Function*)M.getOrInsertFunction(
-                      "__type_casting_verification_print_cache_result",
-                      HexTypeUtilSet->VoidTy,
-                      HexTypeUtilSet->Int64Ty, nullptr);
-                  Value *ParamTypeCache[1] = { cacheIndex };
-                  Builder.CreateCall(initFunction, ParamTypeCache);
-                  Builder.SetInsertPoint(InInsertCachePt);
-                  Builder.SetInsertPoint(InElseCacheTerm);
-                  Builder.SetInsertPoint(InInsertCachePt);
-                  Builder.SetInsertPoint(InInsertPt);
-                  Builder.SetInsertPoint(InElseTerm);
-                  initFunction =
-                    (Function*)M.getOrInsertFunction(
-                      "__type_casting_verification_inline",
-                      HexTypeUtilSet->VoidTy,
-                      HexTypeUtilSet->Int64Ty,
-                      HexTypeUtilSet->Int64Ty,
-                      HexTypeUtilSet->Int64Ty,
-                      HexTypeUtilSet->Int64Ty,
-                      nullptr);
-                  Value *Param[4] = {srcIndex, dstValue,
-                    mapIndex64, cacheIndex};
-                  Builder.CreateCall(initFunction, Param);
-                  Builder.SetInsertPoint(InInsertPt);
-                  Builder.SetInsertPoint(InsertPt);
-                  Builder.SetInsertPoint(ElseTerm);
-                  // (5) call normal check function
-                  initFunction =
-                    (Function*)M.getOrInsertFunction(
-                      "__type_casting_verification_inline_normal",
-                      HexTypeUtilSet->VoidTy,
-                      HexTypeUtilSet->IntptrTyN,
-                      HexTypeUtilSet->Int64Ty,
-                      nullptr);
-                  Value *Param_elseterm[2] = { newPtr, dstValue };
-                  Builder.CreateCall(initFunction, Param_elseterm);
-                  (&*i)->eraseFromParent();
-                  Builder.SetInsertPoint(InsertPt);
-                  Builder.SetInsertPoint(InsertPtMain);
-                  Builder.SetInsertPoint(ElseTermNotNull);
-                  Builder.SetInsertPoint(InsertPtMain);
-                  break;
-                }
-              }
-            }
-          if(update == false)
-            BB++;
-        }
-    }
-    
     //Paul: generic function for starting the module
     virtual bool runOnModule(Module &M) {
       // Init HexTypeUtil
@@ -831,11 +595,11 @@ namespace {
       HexTypeUtilSet = &HexTypeUtilSetT;
       HexTypeUtilSet->initType(M);
 
+      emitObjTypeMapInit(M);
+
       // Create type releationship information
       //Paul: todo
       HexTypeUtilSet->createObjRelationInfo(M);
-      if (HexTypeUtilSet->AllTypeInfo.size() > 0)
-        emitTypeInfoAsGlobalVal(M);
 
       // Init for only tracing casting related objects
       //Paul: todo
@@ -845,11 +609,6 @@ namespace {
         HexTypeUtilSet->extendCastingRelatedTypeSet();
 
       typecastinginsertranges(M);
-
-      // Apply typecasting inline optimization
-      //Paul: todo
-      if (ClInlineOpt)
-        typecastinginlineoptimization(M);
 
       // Apply compile time verfication optimization
       //Paul: todo
