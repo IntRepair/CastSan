@@ -172,6 +172,7 @@ static std::vector<SD_VtableMD> sd_generateSubvtableInfo(clang::CodeGen::CodeGen
                                                          const clang::CXXRecordDecl *RD,
                                                          const clang::BaseSubobject *Base = NULL){
 
+	// make sure the parent has a vtable.
   //std::map<uint64_t, std::set<const clang::BaseSubobject*> > subObjMap;
   clang::ItaniumVTableContext &ctx = CGM->getVTables().getItaniumVTableContext();
   std::map<uint64_t, vtbl_set_t> addrPtMap;
@@ -217,6 +218,8 @@ static std::vector<SD_VtableMD> sd_generateSubvtableInfo(clang::CodeGen::CodeGen
 
       //from all the parenst pick the one from the front of the path
       const clang::CXXRecordDecl *DirectParent = parentInheritancePath.front();
+      if (DirectParent != RD)
+	      CGM->EmitVTable(DirectParent);
 
       //erase the direct parent from inheritance path
       parentInheritancePath.erase(parentInheritancePath.begin());

@@ -186,6 +186,7 @@ void* __dynamic_casting_verification(uptr* const SrcAddr,
                                      std::ptrdiff_t Src2dst_offset) {
   uptr* TmpAddr = (uptr *)((char *)SrcAddr - Src2dst_offset);
   uint64_t vptr = *(uint64_t*) SrcAddr;
+  printf("dyncast!!! vptr: %lu, start: %lu, width: %lu \n", vptr, start, width);
   if (__type_casting_verification_ranged(start, width, alignment, alignment_r, (const void*)vptr))
   {
 	  return TmpAddr;
@@ -202,6 +203,7 @@ void* __dynamic_casting_verification_equal(uptr* const SrcAddr,
                                            std::ptrdiff_t Src2dst_offset) {
   uptr* TmpAddr = (uptr *)((char *)SrcAddr - Src2dst_offset);
   uint64_t vptr = *(uint64_t*) SrcAddr;
+  printf("dyncast!!! vptr: %lu, start: %lu \n", vptr, start);
   if (__type_casting_verification_equal(start, (const void*)vptr))
 	  return TmpAddr;
   else

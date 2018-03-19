@@ -803,6 +803,8 @@ void SDUpdateIndices::handleCheckCast(Module & M) {
 		  
 		  auto DstMangledName = DstType.MangledName;
 		  auto SrcMangledName = SrcType.MangledName;
+
+		  std::cerr << "Cast from " << SrcMangledName << " to " << DstMangledName << std::endl;
 		  
 		  assert (DstType.Polymorphic && SrcType.Polymorphic && "Dynamic cast is not possible");
 		  
@@ -832,6 +834,7 @@ void SDUpdateIndices::handleCheckCast(Module & M) {
 		  // then get the more precise subtree in the vtable tree
 		  if (cha->knowsAbout(vtbl)) {
 			  if (BaseType->MangledName.compare(DstType.MangledName) != 0) {
+
 				  int64_t ind = cha->getSubVTableIndex(DstType.MangledName, BaseType->MangledName);
 				  std::cerr << "CastCheck: Index = " << ind << std::endl;
 				  if (ind != -1) {
@@ -849,11 +852,11 @@ void SDUpdateIndices::handleCheckCast(Module & M) {
 		  // ensure we got the vptr as int8ptr, get the alignement and put everything back in a Intrinsic
 		  if (cha->knowsAbout(vtbl) &&
 		      (!cha->isUndefined(vtbl) || cha->hasFirstDefinedChild(vtbl))) {
-			  
+                          
 			  start = cha->isUndefined(vtbl) ?
-				  layoutBuilder->getVTableRangeStart(cha->getFirstDefinedChild(vtbl)) :
-				  layoutBuilder->getVTableRangeStart(vtbl);
-			  
+                                 layoutBuilder->getVTableRangeStart(cha->getFirstDefinedChild(vtbl)) :
+                                 layoutBuilder->getVTableRangeStart(vtbl);
+
 			  rangeWidth = cha->getCloudSize(vtbl.first);
 			  std::cerr << "CastCheck: [rangeWidth = " << rangeWidth << " start = " << start << "] " << std::endl;
 		  } else {

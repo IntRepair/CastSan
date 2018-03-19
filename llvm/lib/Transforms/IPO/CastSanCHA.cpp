@@ -303,8 +303,9 @@ void SDBuildCHA::buildClouds(Module &M) {
         const nmd_sub_t* subInfo = & info.subVTables[ind];
         vtbl_t name(info.className, ind);
         
-        sd_print("SubVtable: %d Order: %d clossest Parents count: %d ",
-          ind, 
+        sd_print("SubVtable: %d Name: %s Order: %d clossest Parents count: %d ",
+          ind,
+          info.className.c_str(),
           subInfo->order,
           subInfo->parents.size());
 
@@ -481,9 +482,8 @@ std::vector<SDBuildCHA::nmd_t> SDBuildCHA::extractMetadata(NamedMDNode* md, std:
     */
     GlobalVariable* classVtbl = sd_mdnodeToGV(md->getOperand(op++));
 
-    if (classVtbl) {
+    if (classVtbl)
       info.className = classVtbl->getName();
-    }
     
     /*Paul:
     get the number of operands for the first operand 0 for each of the module operands*/
@@ -715,6 +715,7 @@ to build a tool which detects not allowed casts*/
 int64_t SDBuildCHA::getSubVTableIndex(const vtbl_name_t& derived, const vtbl_name_t &base) {
   
   int res = -1;
+
   for (int64_t ind = 0; ind < subObjNameMap[derived].size(); ind++) {
 
     //check if base is an acestor of one of the derived classes 

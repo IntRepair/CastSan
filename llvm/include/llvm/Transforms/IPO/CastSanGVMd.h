@@ -44,6 +44,7 @@ static llvm::MDNode* sd_getClassVtblGVMD(const std::string& className,
   }
 
   if (gv == NULL) {
+	  assert (!className.size() || false);
     return llvm::MDNode::get(C,sd_getMDString(C, "NO_VTABLE"));
   } else {
     llvm::Metadata* gvMd = llvm::ConstantAsMetadata::get(gv);

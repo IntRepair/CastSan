@@ -970,7 +970,7 @@ CodeGenModule::getVTableLinkage(const CXXRecordDecl *RD) {
 /// This is only called for vtables that _must_ be emitted (mainly due to key
 /// functions).  For weak vtables, CodeGen tracks when they are needed and
 /// emits them as-needed.
-void CodeGenModule::EmitVTable(CXXRecordDecl *theClass) {
+void CodeGenModule::EmitVTable(const CXXRecordDecl *theClass) {
   VTables.GenerateClassData(theClass);
 }
 

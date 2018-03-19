@@ -540,6 +540,8 @@ void CodeGenFunction::EmitVTableCastCheck(Address V, const CXXRecordDecl *Derive
     return;
   }
 
+  CGM.EmitVTable(DerivedClassDecl);
+
   printf("Cast Check: inserting cast check from %s to %s", VBaseMangledName.c_str(), DerivedMangledName.c_str());
 
   llvm::Value * isNull = Builder.CreateIsNull(V.getPointer());
