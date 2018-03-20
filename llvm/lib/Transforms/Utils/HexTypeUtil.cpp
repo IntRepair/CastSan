@@ -899,6 +899,30 @@ namespace llvm {
 		  break;
 	  }
     }
+    if (k == -1) {
+	    if (type) {
+		    std::cerr << "Type is there! : " << type->getName().str() << std::endl;
+	    } else {
+		    
+		    uint64_t TypeHashValueInt;
+		    for (auto & entry : Elements)
+		    {
+			    if (AllocType == PLACEMENTNEW || AllocType == REINTERPRET)
+				    TypeHashValueInt = entry.first;
+			    else
+				    TypeHashValueInt = getHashValueFromSTy(entry.second);
+			    
+			    
+			    std::cerr << "TypeHash is: " << TypeHashValueInt << std::endl;
+			    break;
+		    }
+	    }
+	    if (!isInterestingType(type))
+		    return;
+
+	    if (type->getName().startswith("union"))
+		    return;
+    }
     assert (k != -1 && "Type not found in AllTypeInfo?");
 
     CHTreeNode & VType = CastSan.Types[TypeHash];

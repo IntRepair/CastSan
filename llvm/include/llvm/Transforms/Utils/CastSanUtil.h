@@ -24,7 +24,7 @@ namespace llvm {
 		typedef std::pair<CHTreeNode* const, uint64_t> TreeIndex;
 		
 		std::string MangledName;
-		uint64_t TypeHash;
+		uint64_t TypeHash = 0;
 		bool Polymorphic;
 
 		StructType * StructType;

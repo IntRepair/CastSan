@@ -23,11 +23,12 @@ namespace llvm {
 			uint64_t TypeHash = getUInt64MD(MdIt->getOperand(1)->getOperand(0));
 
 			CHTreeNode & Type = Types[TypeHash];
+			
+			if (Type.TypeHash != 0)
+				continue; // Duplicate Type
+
 			Type.MangledName = MangledNameMD->getString();
 			Type.TypeHash = TypeHash;
-
-			if (Type.ParentHashes.size())
-				continue; // Duplicate Type
 
 			uint64_t Polymorphic = getUInt64MD(MdIt->getOperand(2)->getOperand(0));
 			Type.Polymorphic = Polymorphic == 1 ? true : false;
@@ -36,7 +37,16 @@ namespace llvm {
 
 			if (!ParentsNum)
 			{
-				Roots.push_back(&Type);
+				bool alreadyRoot = false;
+				for (auto & node : Roots)
+					if (node == &Type)
+						alreadyRoot = true;
+				if (!alreadyRoot)
+					Roots.push_back(&Type);
+				else
+				{
+					assert (false && "Duplicate root after duplicate detection??");
+				}
 			}
 
 			for (uint64_t i = 0; i < ParentsNum; i++)
@@ -92,8 +102,21 @@ namespace llvm {
 			{
 				if (Desc->TypeHash == Child->TypeHash)
 				{
-					Roots.push_back(Type);
-					Type->DiamondRootInTreeWithChild.push_back(std::make_pair(Descendents[0], Child));
+					bool alreadyRoot = false;
+					for (auto & node : Roots)
+						if (node == Type)
+							alreadyRoot = true;
+							
+					if (!alreadyRoot)
+						Roots.push_back(Type);
+
+					bool alreadyDia = false;
+					for (auto & dia : Type->DiamondRootInTreeWithChild)
+						if (dia.first == Descendents[0] && dia.second == Child)
+							alreadyDia = true;
+					
+					if (!alreadyDia)
+						Type->DiamondRootInTreeWithChild.push_back(std::make_pair(Descendents[0], Child));
 					return;
 				}
 			}
