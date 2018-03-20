@@ -223,54 +223,6 @@ void SDBuildCHA::buildClouds(Module &M) {
     // this function is called for each generated v table, during code generation  
     extractMetadata(static_cast<NamedMDNode*>(itr), infoVec);
   }
-
-  for (const nmd_t& info : infoVec)
-  {
-	  std::stack<int> duplicates;
-	  int i = 0;
-	  for (auto type : types)
-	  {
-		  if (type->hasName() && type->getName().compare(info.className) == 0)
-		  {
-			  duplicates.push(i);
-			  sd_print("FakeVT skipping: %s, is duplicate\n", type->getName().data());
-		  }
-		  else if (type->isOpaque())
-		  {
-			  duplicates.push(i);
-			  if (type->hasName())
-				  sd_print("FakeVT skipping: %s, is opaque\n", type->getName().data());
-			  else
-				  sd_print("FakeVT skipping opaque without name\n");
-		  }
-		  else if (type->isLiteral())
-		  {
-			  duplicates.push(i);
-			  if (type->hasName())
-				  sd_print("FakeVT skipping: %s, is literal\n", type->getName().data());
-			  else
-				  sd_print("FakeVT skipping literal without name\n");
-		  }
-		  else
-		  {
-			  if (type->hasName())
-				  sd_print("FakeVT: %s, will be handled\n", type->clangMangledName.data());
-			  else
-			  {
-				  duplicates.push(i);
-				  sd_print("FakeVT!!! skipping random type without name\n");
-			  }
-		  }
-		  i++;
-	  }
-
-	  while (duplicates.size() > 0)
-	  {
-		  types.erase(types.begin() + duplicates.top());
-		  duplicates.pop();
-	  }
-  }
-
     //nmd_t is the main top root node type, now iterate through the info vector   
     for (const nmd_t& info : infoVec) {
      

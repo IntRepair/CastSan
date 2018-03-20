@@ -218,9 +218,6 @@ class StructType : public CompositeType {
 
 public:
 
-  StringRef clangMangledName = "";
-  void setMangledName(StringRef name);
-
   /// This creates an identified struct.
   static StructType *create(LLVMContext &Context, StringRef Name);
   static StructType *create(LLVMContext &Context);

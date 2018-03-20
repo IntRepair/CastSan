@@ -770,21 +770,6 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   if (!Entry) {
     Entry = llvm::StructType::create(getLLVMContext());
     addRecordTypeName(RD, Entry, "");
-    if (isa<CXXRecordDecl>(RD))
-    {
-	    const CXXRecordDecl * cxxrd = static_cast<const CXXRecordDecl *>(RD);
-	    auto name = CGM.getCXXABI().GetClassMangledName(cxxrd);
-	    Entry->clangMangledName = CGM.getCXXABI().GetClassMangledName(cxxrd);
-    }
-  }
-  else
-  {
-	  if (Entry->clangMangledName.compare("") == 0)
-	  {
-		  const CXXRecordDecl * cxxrd = static_cast<const CXXRecordDecl *>(RD);
-		  assert (cxxrd && "cxx rd is null");
-		  Entry->clangMangledName = CGM.getCXXABI().GetClassMangledName(cxxrd);
-	  }
   }
   llvm::StructType *Ty = Entry;
 
