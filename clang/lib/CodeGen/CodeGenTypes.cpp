@@ -764,13 +764,14 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   // type connected to the decl.
   const Type *Key = Context.getTagDeclType(RD).getTypePtr();
 
-  llvm::StructType *&Entry = RecordDeclTypes[Key];
-
   // If we don't have a StructType at all yet, create the forward declaration.
-  if (!Entry) {
-    Entry = llvm::StructType::create(getLLVMContext());
-    addRecordTypeName(RD, Entry, "");
+  if (!RecordDeclTypes.count(Key)) {
+    RecordDeclTypes[Key] = llvm::StructType::create(getLLVMContext());
+    addRecordTypeName(RD, RecordDeclTypes[Key], "");
   }
+
+  llvm::StructType *&Entry = RecordDeclTypes[Key];
+  
   llvm::StructType *Ty = Entry;
 
   // If this is still a forward declaration, or the LLVM type is already
