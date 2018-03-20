@@ -1472,8 +1472,7 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastCall(
         getItaniumHexTypeDynamicCastFn(CGF), DynamicArgs);
       Value = CGF.Builder.CreateBitCast(DcastResult, DestLTy);
       llvm::GlobalVariable* gv = this->getAddrOfVTable(ClassDecl, CharUnits());
-      if (gv)
-	      CGM.EmitVTable(ClassDecl);
+      CGM.EmitVTable(ClassDecl);
       if (DestTy->isReferenceType()) {
         llvm::BasicBlock *BadCastBlock =
           CGF.createBasicBlock("dynamic_cast_hextype.bad_cast");

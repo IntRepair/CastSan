@@ -218,8 +218,6 @@ static std::vector<SD_VtableMD> sd_generateSubvtableInfo(clang::CodeGen::CodeGen
 
       //from all the parenst pick the one from the front of the path
       const clang::CXXRecordDecl *DirectParent = parentInheritancePath.front();
-      if (DirectParent != RD)
-	      CGM->EmitVTable(DirectParent);
 
       //erase the direct parent from inheritance path
       parentInheritancePath.erase(parentInheritancePath.begin());
