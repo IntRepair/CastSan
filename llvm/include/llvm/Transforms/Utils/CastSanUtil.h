@@ -55,6 +55,7 @@ namespace llvm {
 		std::vector<CHTreeNode*> Roots;
 
 		void extendByStructTypes(HashStructTypeMappingVec & vec);
+		void PrintTree(CHTreeNode * tree, int deep = 0);
 		void getTypeMetadata(Module & M);
 		void buildFakeVTables();
 		uint64_t getRangeWidth(CHTreeNode * Start, CHTreeNode * Root);

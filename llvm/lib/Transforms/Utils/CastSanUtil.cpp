@@ -13,6 +13,7 @@
 
 namespace llvm {
 	void CastSanUtil::getTypeMetadata(Module & M) {
+		assert(Types.size() == 0 && "Already have Metadata....");
 		for (auto MdIt = M.getNamedMDList().begin(); MdIt != M.getNamedMDList().end(); MdIt++) {
 			if (!MdIt->getName().startswith(CS_MD_TYPEINFO))
 				continue;
@@ -24,40 +25,59 @@ namespace llvm {
 
 			CHTreeNode & Type = Types[TypeHash];
 			
-			if (Type.TypeHash != 0)
-				continue; // Duplicate Type
-
-			Type.MangledName = MangledNameMD->getString();
-			Type.TypeHash = TypeHash;
-
-			uint64_t Polymorphic = getUInt64MD(MdIt->getOperand(2)->getOperand(0));
-			Type.Polymorphic = Polymorphic == 1 ? true : false;
+			if (Type.TypeHash != 0) {
+				if (Type.MangledName != MangledNameMD->getString())
+					std::cerr << "Type " << Type.MangledName << " is also known as " << MangledNameMD->getString().str() << std::endl;
+			} else {
+				auto test = MangledNameMD -> getString();
+				Type.MangledName = MangledNameMD->getString();
+				Type.TypeHash = TypeHash;
+				
+				uint64_t Polymorphic = getUInt64MD(MdIt->getOperand(2)->getOperand(0));
+				Type.Polymorphic = Polymorphic == 1 ? true : false;
+			}
 			
 			uint64_t ParentsNum = getUInt64MD(MdIt->getOperand(3)->getOperand(0));
-
-			if (!ParentsNum)
-			{
-				bool alreadyRoot = false;
-				for (auto & node : Roots)
-					if (node == &Type)
-						alreadyRoot = true;
-				if (!alreadyRoot)
-					Roots.push_back(&Type);
-				else
-				{
-					assert (false && "Duplicate root after duplicate detection??");
-				}
-			}
 
 			for (uint64_t i = 0; i < ParentsNum; i++)
 			{
 				uint64_t ParentHash = getUInt64MD(MdIt->getOperand(4 + i)->getOperand(0));
-				Type.ParentHashes.push_back(ParentHash);
+				
+				bool alreadyChild = false;
+				for (auto node : Type.ParentHashes)
+					if (node == ParentHash)
+						alreadyChild = true;
+
+				if (!alreadyChild)
+					Type.ParentHashes.push_back(ParentHash);
 			}
 
 		}
 
-		extendTypeMetadata();
+		// sanity checks. Each Mangled Name should be unique.
+		for (auto & node : Types)
+		{
+			if (node.second.ParentHashes.size() == 0) {
+				Roots.push_back(&node.second);
+			}
+			int count = 0;
+			for (auto & innerNode : Types)
+			{
+				if (node.second.MangledName == innerNode.second.MangledName)
+					count++;
+			}
+			assert (count == 1 && "There is a duplicate Type with different Hashes.");
+		}
+
+	}
+
+	void CastSanUtil::PrintTree(CHTreeNode * root, int deep) {
+		for (int i = 0; i < deep; i++)
+			std::cerr << " ";
+		std::cerr << root->MangledName << std::endl;
+		for (auto child : root->Children) {
+			PrintTree(child, deep + 1);
+		}
 	}
 
 	void CastSanUtil::extendTypeMetadata() {
@@ -66,23 +86,56 @@ namespace llvm {
 			for (auto & ParentHash : Type.second.ParentHashes)
 			{
 				auto & Parent = Types[ParentHash];
-				Parent.ChildHashes.push_back(Type.first);
-				Type.second.Parents.push_back(&Parent);
+				bool alreadyParent = false;
+				for (auto node : Parent.ChildHashes)
+					if (node == Type.first)
+						alreadyParent = true;
+
+				if (!alreadyParent)
+				{
+					Parent.ChildHashes.push_back(Type.first);
+					Type.second.Parents.push_back(&Parent);
+				}
+				else {
+					bool found = false;
+					for (auto parent : Type.second.Parents) {
+						if (parent == &Parent)
+							found = true;
+					}
+					assert(found && "Already in ChildHashes, but not in Parents?");
+				}
 			}
 		}
 
         // rerun with leafes to set children in better order (i.e. primary relation are first in order)
 		for (auto & Type : Types)
+		{
 			if (!Type.second.ChildHashes.size())
 				setParentsChildrenRecursive(&Type.second);
+
+			for (int i = 0; i < Type.second.Children.size(); i++) {
+				for (int k = 0; k < Type.second.Children.size(); k++)
+				{
+					if (Type.second.Children[i] == Type.second.Children[k])
+						assert(i == k && "There are duplicate CHildren....");
+				}
+			}
+		}
 	}
 
 	void CastSanUtil::setParentsChildrenRecursive(CHTreeNode * Type)
 	{
 		for (CHTreeNode * Parent : Type->Parents)
 		{
-			Parent->Children.push_back(Type);
-			setParentsChildrenRecursive(Parent);
+			bool alreadyChild = false;
+			for (auto node : Parent->Children)
+				if (node == Type)
+					alreadyChild = true;
+
+			if (!alreadyChild) {
+				Parent->Children.push_back(Type);
+				setParentsChildrenRecursive(Parent);
+			}
 		}
 	}
 

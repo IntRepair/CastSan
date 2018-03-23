@@ -23,7 +23,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Support/raw_ostream.h"
-
+#include "llvm/IR/DebugInfoMetadata.h"
 #include <cxxabi.h>
 #include <iostream>
 
@@ -554,9 +554,27 @@ namespace {
 								  CHTreeNode & CastType = CastSan.Types[CastTypeH];
 								  CHTreeNode & PointerType = CastSan.Types[PointerTypeH];
 
+								  if (CastType.TypeHash != CastTypeH)
+									  std::cerr << "Cannot check cast because we do not have the cast type of " << CastTypeH << std::endl;
+								  if(PointerType.TypeHash != PointerTypeH)
+									  std::cerr << "Cannot check cast because we do not have the pointer type of " << PointerTypeH << std::endl;
 								  assert (CastType.TypeHash == CastTypeH && PointerType.TypeHash == PointerTypeH && "Type not found in CastSan MD!");
 
 								  CHTreeNode * RootForCast = CastSan.getRootForCast(&PointerType, &CastType);
+
+								  if (!RootForCast) {
+									  std::cerr << "The cast from " << PointerType.MangledName << " to " << CastType.MangledName << " should probably not be possible" << std::endl;
+
+									  std::cerr << "StrucType Name: " << CastType.TypeHash << ", " << CastType.StructType->getName().str() << std::endl;
+
+									  std::cerr << std::endl << "Trees of Pointer:" << std::endl;
+									  for (auto & index : PointerType.TreeIndices)
+										  CastSan.PrintTree(index.first);
+									  std::cerr << std::endl << "Trees of CastType:" << std::endl;
+									  for (auto & index : CastType.TreeIndices)
+										  CastSan.PrintTree(index.first);
+
+								  }
 								  assert (RootForCast && "CastSan thinks this cast should be illegal");
 
 								  Constant * ConstRangeStart = nullptr;

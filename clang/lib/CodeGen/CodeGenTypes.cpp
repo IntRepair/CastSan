@@ -29,6 +29,7 @@
 #include "llvm/Transforms/Utils/HexTypeUtil.h"
 #include "llvm/Transforms/Utils/CastSanUtil.h"
 #include "llvm/Transforms/IPO/CastSanVtblMD.h"
+#include "clang/AST/DeclTemplate.h"
 using namespace clang;
 using namespace CodeGen;
 
@@ -57,6 +58,8 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
 
   // Name the codegen type after the typedef name
   // if there is no tag type name available
+
+  bool trackedtype = false;
   if (RD->getIdentifier()) {
     // FIXME: We should not have to check for a null decl context here.
     // Right now we do it because the implicit Obj-C decls don't have one.
@@ -67,8 +70,10 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
         //Paul: label the types as blacklisted or trackedtype.
         if (getContext().getSanitizerBlacklist().isBlacklistedType(OSR.str()))
           OS << "blacklistedtype" << '.';
-        else
+        else {
+	      trackedtype = true;
           OS << "trackedtype" << '.';
+        }
         RD->printQualifiedName(OS);
         //TheCXXABI.getMangleContext().mangleCXXRTTI(Context.getTypeDeclType(RD),
         //              OS);
@@ -106,10 +111,28 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
     const CXXRecordDecl * ClassDecl = static_cast<const CXXRecordDecl*>(RD);
     if (ClassDecl->isCompleteDefinition() &&
         ClassDecl->hasDefinition() &&
-        !ClassDecl->isAnonymousStructOrUnion())
+        !ClassDecl->isAnonymousStructOrUnion() && trackedtype && !ClassDecl->isLambda())
     {
-      std::string Name = OS.str();
-      CastSanCreateTypeMD(ClassDecl, Name);
+	    auto def = ClassDecl->getDefinition();
+	    if (def)
+	    {
+		    if (isa<ClassTemplateSpecializationDecl>(def))
+			    def = static_cast<ClassTemplateSpecializationDecl*>(def)->getSpecializedTemplate()->getTemplatedDecl()->getDefinition();
+		    if (def)
+		    {
+			    std::string Name = OS.str();
+			    CastSanCreateTypeMD(def, Name);
+		    }
+	    } else {
+		    std::string Name = OS.str();
+		    llvm::HexTypeCommonUtil HexTypeUtil;
+		    uint64_t TyHashValue = HexTypeUtil.getHashValueFromStr(Name);
+		    std::cerr << "Not inserting Class " << Name << " with hash " << TyHashValue;
+		    if (!def)
+			    std::cerr <<" because it is not the Definition" << std::endl;
+		    else
+			    std::cerr <<" because it is a template spez" << std::endl;
+	    }
     }
   }
 }
@@ -130,28 +153,42 @@ void CodeGenTypes::CastSanCreateTypeMD(const CXXRecordDecl * ClassDecl,
         
     if (ParentClassDecl)
     {
-      std::string ParentNameStr = getCGRecordLayout(ParentClassDecl).getLLVMType()->getName();
+	  SmallString<256> TypeName;
+	  llvm::raw_svector_ostream OS(TypeName);
+	  OS << "trackedtype" << ".";
+	  ParentClassDecl->printQualifiedName(OS);
+	  std::string ParentNameStr = OS.str();
       uint64_t ParentHashValue = HexTypeUtil.getHashValueFromStr(ParentNameStr);
       TyParents.push_back(ParentHashValue);
     }
     it++;
   }
 
-  CastSanInsertTypeMD(TyMangledName, TyHashValue, ClassDecl->isPolymorphic(), TyParents);
+  CastSanInsertTypeMD(TyMangledName, TyHashValue, TyName, ClassDecl->isPolymorphic(), TyParents);
 }
 
 void CodeGenTypes::CastSanInsertTypeMD(std::string TyMangledName,
                                        uint64_t TyHashValue,
+                                       std::string structName,
                                        bool Polymorphic,
                                        std::vector<uint64_t> TyParents)
 {
 	llvm::Module & M = CGM.getModule();
 	llvm::LLVMContext & C = CGM.getLLVMContext();
-	llvm::NamedMDNode * TyInfoMD = M.getOrInsertNamedMetadata(CS_MD_TYPEINFO + TyMangledName);
+	llvm::NamedMDNode * TyInfoMD = M.getOrInsertNamedMetadata(CS_MD_TYPEINFO + std::to_string(TyHashValue));
 
 	// Type is already inserted
-	if (TyInfoMD->getNumOperands() > 0)
+	if (TyInfoMD->getNumOperands() > 0) {
+		TyInfoMD->getOperand(0);
+		
+		llvm::MDString * MangledNameMD = dyn_cast_or_null<llvm::MDString>(TyInfoMD->getOperand(0)->getOperand(0));
+		std::string name = MangledNameMD->getString();
+
+		if (name.compare(TyMangledName) != 0)
+			std::cerr << "Class " << structName << " is already known as " << name << ", do not insert " << TyMangledName << std::endl;
+		
 		return;
+	}
 
 	std::cerr << "Inserting Class " << TyMangledName << " with " << TyParents.size() << " parents" << std::endl;
 
@@ -837,6 +874,11 @@ CodeGenTypes::getCGRecordLayout(const RecordDecl *RD) {
     Layout = CGRecordLayouts.lookup(Key);
   }
 
+  if (!Layout) {
+	  std::string TyMangledName = CGM.getCXXABI().GetClassMangledName(dyn_cast<CXXRecordDecl>(RD));
+	  std::cerr << "Could not find RecordLayout for " << TyMangledName << std::endl;
+
+  }
   assert(Layout && "Unable to find record layout information for type");
   return *Layout;
 }

@@ -336,6 +336,7 @@ public:
 
   void CastSanInsertTypeMD(std::string TyMangledName,
                            uint64_t TyHashValue,
+                           std::string TyName,
                            bool Polymorphic,
                            std::vector<uint64_t> TyParents);
 

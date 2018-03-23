@@ -1775,7 +1775,9 @@ void ItaniumCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
   const VTableLayout &VTLayout = VTContext.getVTableLayout(RD);
 
   // Basti: always emit VTable for ExternalLinkage, available for cast checks
-  llvm::GlobalVariable::LinkageTypes Linkage = llvm::GlobalVariable::ExternalLinkage;
+  llvm::GlobalVariable::LinkageTypes Linkage = CGM.getVTableLinkage(RD);
+  if (Linkage != llvm::GlobalVariable::ExternalLinkage)
+	  Linkage = llvm::GlobalVariable::InternalLinkage;
   llvm::Constant *RTTI =
       CGM.GetAddrOfRTTIDescriptor(CGM.getContext().getTagDeclType(RD));
 
