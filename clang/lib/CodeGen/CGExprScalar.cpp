@@ -1492,18 +1492,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_DerivedToBase: {
     // The EmitPointerWithAlignment path does this fine; just discard
     // the alignment.
-	  const CXXRecordDecl * BaseClassDecl = DestTy->getPointeeCXXRecordDecl();
-	  const CXXRecordDecl * DerivedClassDecl = E->getType()->getPointeeCXXRecordDecl();
-
-	  Address Derived = CGF.EmitPointerWithAlignment(E);
-	  if(CGF.CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic() && !BaseClassDecl->isPolymorphic())
-	  {
-		  std::cerr << "Inserting Upcast now!!!!" << std::endl;
-		  char InstName[100] = {"__poly_upcasting_handle"};
-		  CGF.getTypeElement(DerivedClassDecl, Derived.getPointer(), 0, InstName);
-	  }
-
-    return CGF.EmitPointerWithAlignment(CE).getPointer();
+	return CGF.EmitPointerWithAlignment(CE).getPointer();
   }
 
   case CK_Dynamic: {

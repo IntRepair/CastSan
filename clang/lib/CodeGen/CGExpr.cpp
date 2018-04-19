@@ -540,8 +540,6 @@ void CodeGenFunction::EmitVTableCastCheck(Address V, const CXXRecordDecl *Derive
     return;
   }
 
-  CGM.EmitVTable(DerivedClassDecl);
-
   printf("Cast Check: inserting cast check from %s to %s", VBaseMangledName.c_str(), DerivedMangledName.c_str());
 
   llvm::Value * isNull = Builder.CreateIsNull(V.getPointer());
@@ -3741,18 +3739,8 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
       E->getSubExpr()->getType()->getAs<RecordType>();
     auto *DerivedClassDecl = cast<CXXRecordDecl>(DerivedClassTy->getDecl());
 
-    const RecordType *BaseClassTy = E->getType()->getAs<RecordType>();
-    auto *BaseClassDecl = cast<CXXRecordDecl>(BaseClassTy->getDecl());
-
     LValue LV = EmitLValue(E->getSubExpr());
     Address This = LV.getAddress();
-
-    if(CGM.getCodeGenOpts().EmitCastChecks && DerivedClassDecl->isPolymorphic() && !BaseClassDecl->isPolymorphic())
-    {
-	    std::cerr << "Inserting Upcast now!!!!" << std::endl;
-	    char InstName[100] = {"__poly_upcasting_handle"};
-	    getTypeElement(DerivedClassDecl, This.getPointer(), 0, InstName);
-    }
 
     // Perform the derived-to-base conversion
     Address Base = GetAddressOfBaseClass(
