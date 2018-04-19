@@ -303,7 +303,6 @@ namespace llvm {
 
     int i = 0;
     for (auto & typeInfo : AllTypeInfo) {
-	    std::cerr << "Type: " << typeInfo.DetailInfo.TypeName << " Hash: " << typeInfo.DetailInfo.TypeHashValue << std::endl;
 	    HashStructVec.push_back(std::make_pair(typeInfo.DetailInfo.TypeHashValue, typeInfo.StructTy));
 	    i++;
     }
@@ -663,7 +662,6 @@ namespace llvm {
   //Paul: used to remove some substrings from other strings
   void HexTypeCommonUtil::syncTypeName(std::string& TargetStr) {
     SmallVector<std::string, 12> RemoveStrs;
-    RemoveStrs.push_back("::");
     RemoveStrs.push_back("class.");
     RemoveStrs.push_back("./");
     RemoveStrs.push_back("struct.");
@@ -902,6 +900,11 @@ namespace llvm {
     if (k == -1) {
 	    if (type) {
 		    std::cerr << "Type is there! : " << type->getName().str() << std::endl;
+		    if (type->getName().str().find(".anon.") != std::string::npos)
+		    {
+			    std::cerr << "Anon type. Stop here" << std::endl;
+			    return;
+		    }
 	    } else {
 		    
 		    uint64_t TypeHashValueInt;
@@ -922,14 +925,13 @@ namespace llvm {
 
 	    if (type->getName().startswith("union"))
 		    return;
+
+	    if (type->getName().startswith("class.anon"))
+		    return;
     }
     assert (k != -1 && "Type not found in AllTypeInfo?");
 
     CHTreeNode & VType = CastSan.Types[TypeHash];
-
-    std::cerr << "AllocType: " << AllocType << " Type: " << VType.MangledName << " isPoly: " << VType.Polymorphic << std::endl;
-    if (AllocType != UPCAST && VType.Polymorphic)
-	    return;
 
     for (auto &entry : Elements) {
 	  uint32_t OffsetInt;
@@ -1393,7 +1395,6 @@ namespace llvm {
         if (innerSTy && isInterestingStructType(innerSTy)) {
           TypeDetailInfo ParentTmp;
           setTypeDetailInfo(innerSTy, ParentTmp, 0);
-          std::cerr << "Parsing " << NewType.DetailInfo.TypeName << " is a child of " << ParentTmp.TypeName << std::endl;
           NewType.DirectParents.push_back(ParentTmp);
         }
       }
