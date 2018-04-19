@@ -48,8 +48,9 @@ namespace llvm {
 					if (node == ParentHash)
 						alreadyChild = true;
 
-				if (!alreadyChild)
+				if (!alreadyChild && ParentHash != TypeHash) {
 					Type.ParentHashes.push_back(ParentHash);
+				}
 			}
 
 		}
@@ -69,6 +70,7 @@ namespace llvm {
 			assert (count == 1 && "There is a duplicate Type with different Hashes.");
 		}
 
+		extendTypeMetadata();
 	}
 
 	void CastSanUtil::PrintTree(CHTreeNode * root, int deep) {
@@ -91,7 +93,7 @@ namespace llvm {
 					if (node == Type.first)
 						alreadyParent = true;
 
-				if (!alreadyParent)
+				if (!alreadyParent && &Parent != &Type.second)
 				{
 					Parent.ChildHashes.push_back(Type.first);
 					Type.second.Parents.push_back(&Parent);
@@ -121,6 +123,30 @@ namespace llvm {
 				}
 			}
 		}
+
+		for (auto root : Roots) {
+			std::vector<CHTreeNode*> path;
+			findLoop(path, root);
+		}
+	}
+
+	void CastSanUtil::findLoop(std::vector <CHTreeNode*> & path, CHTreeNode * type) {
+		std::vector<CHTreeNode*> newPath;
+		for (auto node : path) {
+			if (node == type) {
+				std::cerr << "Loop detected: " << std::endl;
+				for (auto n : path) {
+					std::cerr << n->MangledName << std::endl;
+				}
+				std::cerr << type->MangledName << std::endl;
+			}
+			assert(node != type && "Loop detected.");
+			newPath.push_back(node);
+		}
+		newPath.push_back(type);
+		for (auto child : type->Children) {
+			findLoop (newPath, child);
+		}
 	}
 
 	void CastSanUtil::setParentsChildrenRecursive(CHTreeNode * Type)
@@ -132,7 +158,7 @@ namespace llvm {
 				if (node == Type)
 					alreadyChild = true;
 
-			if (!alreadyChild) {
+			if (!alreadyChild && Parent != Type) {
 				Parent->Children.push_back(Type);
 				setParentsChildrenRecursive(Parent);
 			}
@@ -198,6 +224,7 @@ namespace llvm {
 					}
 				}
 			} else {
+				assert(Child && Child != tree && "Child loop...");
 				if (isSubtreeInTree(subtree, Child, root))
 					return true;
 			}

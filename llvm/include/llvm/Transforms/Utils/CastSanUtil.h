@@ -46,6 +46,7 @@ namespace llvm {
 		uint64_t buildFakeVTablesRecursive(CHTreeNode * Root, uint64_t Index, CHTreeNode * Type);
 		bool isSubtreeInTree(CHTreeNode * Subtree, CHTreeNode * Tree, CHTreeNode * Root = nullptr);
 		void removeDuplicates();
+		void findLoop(std::vector<CHTreeNode*> & path, CHTreeNode * node);
 		const DataLayout & DL;
 	public:
 		CastSanUtil(const DataLayout &DL)
