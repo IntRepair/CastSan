@@ -116,6 +116,10 @@ namespace {
 			      break;
 		      }
 
+	      if (!found) {
+		      std::cerr << "Did not find " << TargetHashValue << std::endl;
+		      return;
+	      }
 	      assert (found && "Type not found?");
       }
       else
@@ -533,6 +537,8 @@ namespace {
 			  {
 				  for (BasicBlock::iterator I = BB->begin(), EI = BB->end(); I != EI; I++)
 				  {
+					  if (!static_cast<Instruction*>(I))
+						  break;
 					  if (CallInst * Call = dyn_cast<CallInst>(I))
 					  {
 						  if (auto Func = Call->getCalledFunction())
@@ -558,14 +564,25 @@ namespace {
 									  std::cerr << "Cannot check cast because we do not have the cast type of " << CastTypeH << std::endl;
 								  if(PointerType.TypeHash != PointerTypeH)
 									  std::cerr << "Cannot check cast because we do not have the pointer type of " << PointerTypeH << std::endl;
-								  assert (CastType.TypeHash == CastTypeH && PointerType.TypeHash == PointerTypeH && "Type not found in CastSan MD!");
+
+								  if (CastType.TypeHash != CastTypeH || PointerType.TypeHash != PointerTypeH)
+								  {
+									  std::cerr << "could not find info in CastSanMD" << std::endl;
+									  Call->eraseFromParent();
+									  continue;
+									  //assert (CastType.TypeHash == CastTypeH && PointerType.TypeHash == PointerTypeH && "Type not found in CastSan MD!");
+								  }
 
 								  CHTreeNode * RootForCast = CastSan.getRootForCast(&PointerType, &CastType);
 
+								  Constant * ConstRangeStart = nullptr;
+								  Constant * ConstRangeWidth = nullptr;
+								  
 								  if (!RootForCast) {
 									  std::cerr << "The cast from " << PointerType.MangledName << " to " << CastType.MangledName << " should probably not be possible" << std::endl;
 
-									  std::cerr << "StrucType Name: " << CastType.TypeHash << ", " << CastType.StructType->getName().str() << std::endl;
+									  std::cerr << "CastType Name: " << CastType.TypeHash << ", " << CastType.StructType->getName().str() << std::endl;
+									  std::cerr << "PointerType Name: " << PointerType.TypeHash << ", " << PointerType.StructType->getName().str() << std::endl;
 
 									  std::cerr << std::endl << "Trees of Pointer:" << std::endl;
 									  for (auto & index : PointerType.TreeIndices)
@@ -574,21 +591,22 @@ namespace {
 									  for (auto & index : CastType.TreeIndices)
 										  CastSan.PrintTree(index.first);
 
-								  }
-								  assert (RootForCast && "CastSan thinks this cast should be illegal");
+									  ConstRangeStart = ConstantInt::get(HexTypeUtilSet->Int64Ty, 0);
+									  ConstRangeWidth = ConstantInt::get(HexTypeUtilSet->Int64Ty, 0);
+									  //assert (RootForCast && "CastSan thinks this cast should be illegal");
+								  } else {
 
-								  Constant * ConstRangeStart = nullptr;
-								  Constant * ConstRangeWidth = nullptr;
-								  for (CHTreeNode::TreeIndex & Index : CastType.TreeIndices)
-								  {
-									  if (Index.first == RootForCast)
+									  for (CHTreeNode::TreeIndex & Index : CastType.TreeIndices)
 									  {
-										  uint64_t RangeStart = Index.second;
-										  uint64_t RangeWidth = CastSan.getRangeWidth(&CastType, Index.first);
-										  
-										  ConstRangeStart = ConstantInt::get(HexTypeUtilSet->Int64Ty, RangeStart);
-										  ConstRangeWidth = ConstantInt::get(HexTypeUtilSet->Int64Ty, RangeWidth);
-										  break;
+										  if (Index.first == RootForCast)
+										  {
+											  uint64_t RangeStart = Index.second;
+											  uint64_t RangeWidth = CastSan.getRangeWidth(&CastType, Index.first);
+											  
+											  ConstRangeStart = ConstantInt::get(HexTypeUtilSet->Int64Ty, RangeStart);
+											  ConstRangeWidth = ConstantInt::get(HexTypeUtilSet->Int64Ty, RangeWidth);
+											  break;
+										  }
 									  }
 								  }
 
