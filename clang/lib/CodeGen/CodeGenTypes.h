@@ -332,7 +332,7 @@ public:
                          StringRef suffix);
 
   void CastSanCreateTypeMD(const CXXRecordDecl * ClassDecl,
-                           std::string TypeName);
+                           std::string TypeName, bool undefinedTempl = false);
 
   void CastSanInsertTypeMD(std::string TyMangledName,
                            uint64_t TyHashValue,

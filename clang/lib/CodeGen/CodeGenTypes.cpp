@@ -116,32 +116,34 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
 	    auto def = ClassDecl->getDefinition();
 	    if (def)
 	    {
+		    CXXRecordDecl * templDef = nullptr;
 		    if (isa<ClassTemplateSpecializationDecl>(def))
-			    def = static_cast<ClassTemplateSpecializationDecl*>(def)->getSpecializedTemplate()->getTemplatedDecl()->getDefinition();
-		    if (def)
+			    templDef = static_cast<ClassTemplateSpecializationDecl*>(def)->getSpecializedTemplate()->getTemplatedDecl()->getDefinition();
+
+		    std::string Name = OS.str();
+		    if (templDef)
 		    {
-			    std::string Name = OS.str();
+			    CastSanCreateTypeMD(templDef, Name, true);
+		    } else {
 			    CastSanCreateTypeMD(def, Name);
 		    }
-	    } else {
-		    std::string Name = OS.str();
-		    llvm::HexTypeCommonUtil HexTypeUtil;
-		    uint64_t TyHashValue = HexTypeUtil.getHashValueFromStr(Name);
-		    std::cerr << "Not inserting Class " << Name << " with hash " << TyHashValue;
-		    if (!def)
-			    std::cerr <<" because it is not the Definition" << std::endl;
-		    else
-			    std::cerr <<" because it is a template spez" << std::endl;
 	    }
     }
   }
 }
 
 void CodeGenTypes::CastSanCreateTypeMD(const CXXRecordDecl * ClassDecl,
-                                       std::string TyName) {
+                                       std::string TyName, bool undefinedTempl) {
   llvm::HexTypeCommonUtil HexTypeUtil;
 
-  std::string TyMangledName = CGM.getCXXABI().GetClassMangledName(ClassDecl);
+  std::string TyMangledName;
+
+  //if (!undefinedTempl)
+	  TyMangledName = CGM.getCXXABI().GetClassMangledName(ClassDecl);
+
+	  /*std::cerr << "This is new!" << std::endl;
+  if (undefinedTempl)
+  TyMangledName = TyName;*/
   uint64_t TyHashValue = HexTypeUtil.getHashValueFromStr(TyName);
   std::vector<uint64_t> TyParents;
     
@@ -175,7 +177,7 @@ void CodeGenTypes::CastSanInsertTypeMD(std::string TyMangledName,
 {
 	llvm::Module & M = CGM.getModule();
 	llvm::LLVMContext & C = CGM.getLLVMContext();
-	llvm::NamedMDNode * TyInfoMD = M.getOrInsertNamedMetadata(CS_MD_TYPEINFO + std::to_string(TyHashValue));
+	llvm::NamedMDNode * TyInfoMD = M.getOrInsertNamedMetadata(CS_MD_TYPEINFO + TyMangledName);
 
 	// Type is already inserted
 	if (TyInfoMD->getNumOperands() > 0) {
@@ -185,12 +187,10 @@ void CodeGenTypes::CastSanInsertTypeMD(std::string TyMangledName,
 		std::string name = MangledNameMD->getString();
 
 		if (name.compare(TyMangledName) != 0)
-			std::cerr << "Class " << structName << " is already known as " << name << ", do not insert " << TyMangledName << std::endl;
 		
 		return;
 	}
 
-	std::cerr << "Inserting Class " << TyMangledName << " with " << TyParents.size() << " parents" << std::endl;
 
 	// Mangled Name for identification with IVT Metadata
 	TyInfoMD->addOperand(llvm::MDNode::get(C, sd_getMDString(C, TyMangledName)));
