@@ -26,6 +26,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ValueHandle.h"
+#include <iostream>
 
 using namespace llvm;
 
@@ -525,6 +526,22 @@ void MDNode::makeDistinct() {
 }
 
 void MDNode::resolve() {
+	if (!isUniqued()) {
+		if (Storage == Temporary) {
+			std::cerr << "It is Temporary" << std::endl;
+			if (isTemporary())
+			{
+				makeUniqued();
+				if (isResolved())
+					return;
+			}
+		}
+		if (Storage == Distinct) {
+			std::cerr << "It is Distinct" << std::endl;
+			assert(false && "It is distinct. Should be resolved????");
+		}
+		dump();
+	}
   assert(isUniqued() && "Expected this to be uniqued");
   assert(!isResolved() && "Expected this to be unresolved");
 
@@ -604,17 +621,24 @@ MDNode *MDNode::replaceWithPermanentImpl() {
 
 MDNode *MDNode::replaceWithUniquedImpl() {
   // Try to uniquify in place.
+	if (!isTemporary())
+		return this;
   MDNode *UniquedNode = uniquify();
 
   if (UniquedNode == this) {
-    makeUniqued();
+	  if (isTemporary())
+		  makeUniqued();
     return this;
   }
 
   // Collision, so RAUW instead.
-  replaceAllUsesWith(UniquedNode);
-  deleteAsSubclass();
-  return UniquedNode;
+  if (isTemporary())
+  {
+	  replaceAllUsesWith(UniquedNode);
+	  deleteAsSubclass();
+	  return UniquedNode;
+  }
+  return this;
 }
 
 MDNode *MDNode::replaceWithDistinctImpl() {
