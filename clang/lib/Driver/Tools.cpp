@@ -1891,6 +1891,7 @@ static void AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
     else
       CmdArgs.push_back("-plugin-opt=-debugger-tune=gdb");
   }
+  CmdArgs.push_back("-plugin-opt=sd-ivtbl");
 }
 
 /// This is a helper function for validating the optional refinement step
@@ -2947,7 +2948,7 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   }
   
   //Paul: add hextype to the static runtimes.
-  if (SanArgs.needsHexTypeRt())
+  if (SanArgs.needsHexTypeRt() && SanArgs.linkCXXRuntimes())
     StaticRuntimes.push_back("hextype");
 }
 

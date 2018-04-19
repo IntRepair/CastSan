@@ -1,0 +1,3 @@
+ - subobject cast (diamond roundtrip)
+ - namespace cutting (same object name in different namespace == loop potential and false positives)
+ - template specializations have same hash -> false positives possible

@@ -22,10 +22,10 @@ export CXX=/code/scripts/clang++_hextype_castsan
 export CFLAGS="-flto -fsanitize=hextype -femit-ivtbl -femit-cast-checks"
 export CXXFLAGS="${CFLAGS}"
 
-export LDFLAGS="${CFLAGS} -B/code/binutils/build/gold -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl -L/code/libdyncast"
+export LDFLAGS="${CFLAGS}"
 export AR="/code/scripts/ar"
 
 
 cd ${NODE_DIR}
 ./configure
-make
+make -j14

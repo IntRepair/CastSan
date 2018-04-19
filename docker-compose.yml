@@ -28,6 +28,22 @@ services:
         working_dir: /code
         user: llvm
         command: ./build_node.sh
+    firefox:
+        image: firefox-env
+        volumes:
+         - .:/code
+        working_dir: /code
+        user: llvm
+        command: ./build_firefox.sh
+    firefox-bash:
+        image: firefox-env
+        volumes:
+         - .:/code
+        working_dir: /code
+        user: root
+        command: /bin/bash
+        tty: true
+        stdin_open: true
     bash_llvm:
         build:
             context: .

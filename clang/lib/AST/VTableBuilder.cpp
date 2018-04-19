@@ -1036,7 +1036,7 @@ public:
 
 
     //if (Context.getLangOpts().DumpVTableLayouts)
-      dumpLayout(llvm::outs());
+    //dumpLayout(llvm::outs());
   }
 
   /*

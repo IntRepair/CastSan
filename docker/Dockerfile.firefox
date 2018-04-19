@@ -1,0 +1,12 @@
+FROM binutils-env
+
+RUN chown llvm:llvm /home/llvm/source
+USER llvm
+WORKDIR /home/llvm/source
+RUN wget https://archive.mozilla.org/pub/firefox/releases/53.0.3/source/firefox-53.0.3.source.tar.xz
+RUN tar xvf firefox-53.0.3.source.tar.xz
+
+USER root
+RUN apt upgrade && apt update -y
+RUN apt install -y time unzip zip libnspr4-dev libnss3-dev pkg-config gtk-3.0-dev libgtk2.0-dev libgconf2-dev yasm libasound-dev libpulse-dev libxt-dev autoconf2.13 libicu-dev
+Run apt install -y libdbus-glib-1-dev xorg-dev libx11-dev libxext-dev libxt-dev libxcb1-dev libxcb-shm0-dev libx11-xcb-dev

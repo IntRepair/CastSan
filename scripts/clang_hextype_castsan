@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
-XARGS="-flto -fsanitize=hextype -femit-ivtbl -femit-cast-checks -B/code/binutils/build/gold/ -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl -ldyncast"
+XARGS="-Wl,-plugin=/code/build/lib/LLVMgold.so -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl"
 for arg in "$@"; do
   case "$arg" in
   -c|-E|-V)
     XARGS=""
     ;;
   -shared)
-	XARGS="-flto -fsanitize=hextype -femit-ivtbl -femit-cast-checks -B/code/binutils/build/gold/ -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl -ldyncast"
+	XARGS="-Wl,-plugin=/code/build/lib/LLVMgold.so -Wl,-plugin-opt=save-temps -Wl,-plugin-opt=sd-ivtbl"
     ;;
   esac
 done
-/code/build/bin/clang "$@" $XARGS
+/code/build/bin/clang -v "$@" $XARGS

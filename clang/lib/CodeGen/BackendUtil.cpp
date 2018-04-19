@@ -415,7 +415,7 @@ void EmitAssemblyHelper::CreatePasses(FunctionInfoIndex *FunctionIndex) {
                            addDataFlowSanitizerPass);
   }
 
-  if (LangOpts.Sanitize.has(SanitizerKind::HexType)) {
+  if (LangOpts.Sanitize.has(SanitizerKind::HexType) && LangOpts.CPlusPlus) {
 	  PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
 			  addHexTypeTreePass);
 	  PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
