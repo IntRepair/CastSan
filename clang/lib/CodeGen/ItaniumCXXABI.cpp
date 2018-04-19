@@ -1471,7 +1471,6 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastCall(
       DcastResult = CGF.EmitNounwindRuntimeCall(
         getItaniumHexTypeDynamicCastFn(CGF), DynamicArgs);
       Value = CGF.Builder.CreateBitCast(DcastResult, DestLTy);
-      llvm::GlobalVariable* gv = this->getAddrOfVTable(ClassDecl, CharUnits());
       CGM.EmitVTable(ClassDecl);
       if (DestTy->isReferenceType()) {
         llvm::BasicBlock *BadCastBlock =
@@ -1767,17 +1766,12 @@ void ItaniumCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
                                           const CXXRecordDecl *RD) {
   llvm::GlobalVariable *VTable = getAddrOfVTable(RD, CharUnits());
   if (VTable->hasInitializer())
-  {
     return;
-  }
 
   ItaniumVTableContext &VTContext = CGM.getItaniumVTableContext();
   const VTableLayout &VTLayout = VTContext.getVTableLayout(RD);
 
-  // Basti: always emit VTable for ExternalLinkage, available for cast checks
   llvm::GlobalVariable::LinkageTypes Linkage = CGM.getVTableLinkage(RD);
-  if (Linkage != llvm::GlobalVariable::ExternalLinkage)
-	  Linkage = llvm::GlobalVariable::InternalLinkage;
   llvm::Constant *RTTI =
       CGM.GetAddrOfRTTIDescriptor(CGM.getContext().getTagDeclType(RD));
 
